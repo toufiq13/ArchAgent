@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, ChevronLeft, Bot, Sparkles } from "lucide-react";
+import { Loader2, ArrowLeft, ChevronLeft, Bot } from "lucide-react";
 import { AnimatedCharacters } from "@/components/ui/animated-characters-login-page";
 import { Logo } from "@/components/Logo";
+import { supabase } from "@/lib/supabase";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -22,18 +23,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
   const validateIdentifier = (value: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^\d{10}$/;
     
     if (!value) {
-      return "Please enter your email or mobile number";
+      return "Please enter your email";
     }
-    if (!emailRegex.test(value) && !phoneRegex.test(value)) {
-      return "Please enter a valid email or 10-digit mobile number";
+    if (!emailRegex.test(value)) {
+      return "Please enter a valid email address";
     }
     return "";
   };
 
-  const handleIdentifierSubmit = (e: FormEvent) => {
+  const handleIdentifierSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
     const error = validateIdentifier(identifier);
@@ -44,22 +44,82 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     
     setErrorMsg("");
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+
+    // DEV BYPASS for name@example.com - skip Supabase sending OTP to avoid rate limits
+    if (identifier.trim() === "name@example.com") {
+      setTimeout(() => {
+        setIsLoading(false);
+        setStep("otp");
+      }, 500);
+      return;
+    }
+    
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: identifier.trim(),
+        options: {
+          shouldCreateUser: true,
+        }
+      });
+
+      if (otpError) {
+        // Provide specific guidance for the common Supabase errors
+        if (otpError.message.includes("confirmation email") || otpError.message.includes("SMTP")) {
+          throw new Error("Supabase is unable to send the email. This usually means the hourly rate limit (3 emails/hr) was hit or your SMTP settings are incorrect. Please check your Supabase Dashboard.");
+        }
+        
+        if (otpError.message.toLowerCase().includes("rate limit")) {
+          throw new Error("Supabase Rate Limit Exceeded. Please wait a few minutes before trying again. For testing, you can use name@example.com with code 12345678.");
+        }
+        
+        throw otpError;
+      }
+      
       setStep("otp");
-    }, 1500);
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      setErrorMsg(err.message || "Failed to send verification code. Check your Supabase configuration.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleOtpSubmit = (e: FormEvent) => {
+  const handleOtpSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (otp.length < 4) return;
+    if (otp.length < 8) return;
+    
+    setErrorMsg("");
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      localStorage.setItem("auth_token", "true");
+
+    // DEV BYPASS for name@example.com
+    if (identifier.trim() === "name@example.com" && otp === "12345678") {
+      localStorage.setItem("auth_token", "mock");
       onLogin();
       navigate("/orchestration");
-    }, 1500);
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: identifier.trim(),
+        token: otp,
+        type: 'email'
+      });
+
+      if (verifyError) throw verifyError;
+
+      if (data.session) {
+        localStorage.setItem("auth_token", "true");
+        onLogin();
+        navigate("/orchestration");
+      }
+    } catch (err: any) {
+      console.error("Verification Error:", err);
+      setErrorMsg(err.message || "Invalid or expired code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -226,20 +286,32 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                       <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Verification Code</label>
                       <Input
                         type="text"
-                        placeholder="000000"
-                        maxLength={6}
+                        placeholder="00000000"
+                        maxLength={8}
                         value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        onChange={(e) => {
+                          setOtp(e.target.value.replace(/\D/g, "").slice(0, 8));
+                          if (errorMsg) setErrorMsg("");
+                        }}
                         onFocus={() => setIsTyping(true)}
                         onBlur={() => setIsTyping(false)}
                         required
                         className="h-14 bg-white/5 border-white/10 rounded-2xl focus-visible:ring-white/20 text-center text-2xl tracking-[0.5em] font-mono transition-all focus:bg-white/10"
                       />
-                      <p className="text-[10px] text-center text-white/30 mt-2">Enter the 6-digit code sent to your device</p>
+                      {errorMsg && step === "otp" && (
+                        <motion.p 
+                          initial={{ opacity: 0, y: -5 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          className="text-red-400 text-xs font-medium text-center mt-2"
+                        >
+                          {errorMsg}
+                        </motion.p>
+                      )}
+                      <p className="text-[10px] text-center text-white/30 mt-2">Enter the 8-digit code sent to your device</p>
                     </div>
                     <Button 
                       type="submit" 
-                      disabled={isLoading || otp.length < 4}
+                      disabled={isLoading || otp.length < 8}
                       className="w-full h-14 bg-white text-black hover:bg-white/90 rounded-2xl font-bold text-lg shadow-xl transition-all active:scale-[0.98] border border-white/20"
                     >
                       {isLoading ? <Loader2 className="animate-spin h-6 w-6" /> : "Verify & Login"}

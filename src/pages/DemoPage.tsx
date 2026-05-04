@@ -1,15 +1,9 @@
-import AnimatedGenerateButton from "@/components/ui/animated-generate-button-shadcn-tailwind";
-
-const DemoOne = () => {
+export default function DemoPage() {
   return (
-    <div className="w-full h-screen bg-black flex items-center justify-center">
-      <AnimatedGenerateButton
-        labelIdle="Generate"
-        labelActive="Building"
-        highlightHueDeg={210}
-      />
+    <div className="w-full h-screen bg-black relative">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <h1 className="text-white/20 text-4xl font-black uppercase tracking-widest">Shader View Reserved</h1>
+      </div>
     </div>
   );
-};
-
-export default DemoOne;
+}

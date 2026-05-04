@@ -12,6 +12,7 @@ import Lenis from '@studio-freight/lenis';
 import { StarButton } from "@/components/ui/star-button";
 import HoverAnimationButton from "@/components/ui/hover-animation-button";
 import { HoverButton } from "@/components/ui/hover-glow-button";
+import { supabase } from "@/lib/supabase";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,7 +82,10 @@ const FEATURED_DESIGNS = [
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [isAuthenticated] = useState(() => localStorage.getItem("auth_token") === "true");
+  const [isAuthenticated] = useState(() => {
+    const token = localStorage.getItem("auth_token");
+    return token === "true" || token === "mock";
+  });
   const [bgImage, setBgImage] = useState(ARCH_IMAGES[0]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
@@ -119,7 +123,12 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     localStorage.removeItem("auth_token");
     window.location.reload();
   };

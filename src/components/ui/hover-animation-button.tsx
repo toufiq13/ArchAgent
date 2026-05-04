@@ -7,7 +7,7 @@ interface ButtonProps {
   className?: string;
 }
 
-const HoverAnimationButton: React.FC<ButtonProps> = ({ children = "Button", onClick, className }) => {
+const HoverAnimationButton: React.FC<ButtonProps> = ({ children, onClick, className }) => {
   return (
     <button 
       onClick={onClick}
@@ -16,10 +16,16 @@ const HoverAnimationButton: React.FC<ButtonProps> = ({ children = "Button", onCl
         className
       )}
     >
-      <span className="relative z-10 transition-transform duration-500 group-hover:-translate-y-full flex flex-col items-center">
-        <span>{children}</span>
-        <span className="absolute top-full">{children}</span>
-      </span>
+      <div className="relative z-10 h-full w-full overflow-hidden">
+        <div className="flex flex-col h-full w-full transition-transform duration-500 ease-[0.16,1,0.3,1] group-hover:-translate-y-full">
+          <div className="flex h-full w-full shrink-0 items-center justify-center">
+            {children}
+          </div>
+          <div className="flex h-full w-full shrink-0 items-center justify-center">
+            {children}
+          </div>
+        </div>
+      </div>
       <div className="absolute inset-x-0 bottom-0 h-1 bg-white scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
     </button>
   );

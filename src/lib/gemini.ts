@@ -191,18 +191,47 @@ export async function generateMultipleDesignImages(
   count: number = 4,
   _size: "1K" | "2K" | "4K" = "1K"
 ): Promise<string[]> {
-  const baseSeed = Math.floor(Math.random() * 100000);
-  const seeds = Array.from({ length: count }, (_, i) => baseSeed + i * 77777);
+  const baseSeed = Math.floor(Math.random() * 1000000);
+  
+  // Variations to ensure diversity across the 4 images
+  const variations = [
+    ", 360 degree equirectangular panorama, cinematic wide-angle, hyper-realistic, 8k, architectural digest, sharp focus, natural daylight",
+    ", equirectangular 360 degree view, eye-level perspective, master-crafted materials, twilight lighting, professional visualization, high detail",
+    ", 360 panoramic architectural render, blueprint focus, detailed textures, warm interior glow, luxury aesthetic, ultra-sharp",
+    ", full 360 degree immersive panorama, dramatic architectural lighting, morning mist, high contrast, obsidian and wood textures, premium render"
+  ];
 
-  const results = await Promise.allSettled(
-    seeds.map(seed => generateDesignImage(prompt, "1K", seed))
-  );
+  const seeds = Array.from({ length: count }, (_, i) => baseSeed + i * 420);
 
-  const images = results
-    .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-    .map(r => r.value);
+  const images: string[] = [];
+  const errors: string[] = [];
 
-  if (images.length === 0) throw new Error("All image generation attempts failed");
+  // Run in sequence with significant stagger to avoid cascading 429s
+  for (let i = 0; i < count; i++) {
+    try {
+      const variedPrompt = prompt + (variations[i] || "");
+      
+      // Delay: 0s for first, then smaller increments to speed up generation
+      if (i > 0) {
+        const delay = 1000 + (i * 400) + (Math.random() * 500); 
+        console.log(`[Image] Staggering variant ${i+1}/${count} by ${delay.toFixed(0)}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+      
+      const img = await generateDesignImage(variedPrompt, "1K", seeds[i]);
+      if (img) images.push(img);
+    } catch (err: any) {
+      console.warn(`[Image] Variant ${i+1} synthesis failed:`, err.message);
+      errors.push(err.message);
+    }
+  }
+
+  // Graceful degradation: If at least ONE image succeeded, return it instead of failing
+  if (images.length === 0) {
+    throw new Error(`Architectural synthesis cluster is busy. All attempts were rejected: ${errors[0]}`);
+  }
+  
+  console.log(`[Image] Cluster synthesis complete: ${images.length}/${count} variants delivered.`);
   return images;
 }
 

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, type MouseEvent } from "react";
+import { useState, useEffect, useRef, type MouseEvent, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import Viewer3D from "@/components/Viewer3D";
-import { Waves } from "@/components/ui/wave-background";
+import InteractiveWaveShader from "@/components/ui/flowing-waves-shader";
 import { 
   Plus, 
   Send, 
@@ -26,7 +26,8 @@ import {
   PanelLeftClose,
   Menu,
   ChevronRight,
-  X
+  X,
+  Maximize
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "motion/react";
 import { getArchitectStream, getCostEstimation, generateDesignImage, generateMultipleDesignImages, generateProjectTitle, enhancePrompt, type CostBreakdown } from "@/lib/gemini";
 import { cn } from "@/lib/utils";
-import AnoAI from "@/components/ui/animated-shader-background";
 import { Logo } from "@/components/Logo";
 import { STYLE_PRESETS, type StylePreset, type DesignConcept } from "@/types";
 
@@ -109,7 +109,7 @@ const ArchAgentLogo = () => (
   </svg>
 );
 
-const StatusBadge = ({ endpoint, provider, label }: { endpoint: string, provider: string, label: string }) => {
+const StatusBadge = memo(({ endpoint, provider, label }: { endpoint: string, provider: string, label: string }) => {
   const [status, setStatus] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -135,7 +135,7 @@ const StatusBadge = ({ endpoint, provider, label }: { endpoint: string, provider
       )}>{label}</span>
     </div>
   );
-};
+});
 
 const UserProfileLogo = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full p-2 text-white">
@@ -144,11 +144,39 @@ const UserProfileLogo = () => (
   </svg>
 );
 
+const ProjectTab = memo(({ id, label, icon: Icon, active, onClick }: { id: string, label: string, icon: any, active: boolean, onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all",
+      active 
+        ? "bg-white text-black shadow-lg" 
+        : "text-white/40 hover:text-white hover:bg-white/5"
+    )}
+  >
+    <Icon className="h-4 w-4" />
+    {label}
+  </button>
+));
+
+import { supabase } from "@/lib/supabase";
+
 export default function OrchestrationPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"chat" | "cost" | "visual">("chat");
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUser(user);
+      } else if (localStorage.getItem("auth_token") === "mock") {
+        setUser({ email: "name@example.com" });
+      }
+    });
+  }, []);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -192,35 +220,109 @@ export default function OrchestrationPage() {
     setEditingSessionId(null);
   };
 
-  // Load sessions from localStorage
-  useEffect(() => {
+  // Function to sync sessions with Supabase
+  const syncWithSupabase = async (sessionsToSync: ProjectSession[]) => {
+    if (!supabase) return;
+    
     try {
-      const saved = localStorage.getItem("arch_agent_sessions");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSessions(parsed);
-          setCurrentSessionId(parsed[0].id);
+      // For simplicity in this demo, we'll store all sessions as a single record or multiple.
+      // Ideally, each session is a row. Let's try to upsert them.
+      for (const session of sessionsToSync) {
+        const { error } = await supabase
+          .from('project_sessions')
+          .upsert({
+            id: session.id,
+            title: session.title,
+            messages: session.messages,
+            design_prompt: session.designPrompt,
+            design_image: session.designImage,
+            design_images: session.designImages,
+            cost_breakdown: session.costBreakdown,
+            timestamp: session.timestamp
+          });
+        
+        if (error) {
+          // If table doesn't exist, this will fail gracefully or we log it
+          if (error.code === '42P01') {
+            console.warn("Supabase table 'project_sessions' not found. Falling back to local storage.");
+            break;
+          }
+          console.error("Supabase sync error:", error.message);
+        }
+      }
+    } catch (e) {
+      console.error("Supabase communication failed", e);
+    }
+  };
+
+  // Load sessions from Supabase and localStorage
+  useEffect(() => {
+    const loadSessions = async () => {
+      try {
+        let savedSessions: ProjectSession[] = [];
+        
+        // Try Supabase first
+        if (import.meta.env.VITE_SUPABASE_URL) {
+          const { data, error } = await supabase
+            .from('project_sessions')
+            .select('*')
+            .order('timestamp', { ascending: false });
+          
+          if (!error && data && data.length > 0) {
+            savedSessions = data.map(s => ({
+              id: s.id,
+              title: s.title,
+              messages: s.messages,
+              designPrompt: s.design_prompt,
+              designImage: s.design_image,
+              designImages: s.design_images || [],
+              costBreakdown: s.cost_breakdown,
+              timestamp: s.timestamp
+            }));
+            console.log("Loaded sessions from Supabase");
+          }
+        }
+
+        // If Supabase empty or failed, try localStorage
+        if (savedSessions.length === 0) {
+          const saved = localStorage.getItem("arch_agent_sessions");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              savedSessions = parsed.map((s: any) => ({
+                ...s,
+                designImages: s.designImages || (s.designImage ? [s.designImage] : [])
+              }));
+              console.log("Loaded sessions from localStorage");
+            }
+          }
+        }
+
+        if (savedSessions.length > 0) {
+          setSessions(savedSessions);
+          setCurrentSessionId(savedSessions[0].id);
         } else {
           createNewSession();
         }
-      } else {
+      } catch (err) {
+        console.error("Session initialization failed", err);
         createNewSession();
+      } finally {
+        setIsInitializing(false);
       }
-    } catch (err) {
-      console.error("Failed to parse sessions from localStorage", err);
-      createNewSession();
-    } finally {
-      setIsInitializing(false);
-    }
+    };
+
+    loadSessions();
   }, []);
 
-  // Save sessions to localStorage
+  // Save sessions to localStorage and sync with Supabase
   useEffect(() => {
-    if (sessions.length > 0) {
+    if (sessions.length > 0 && !isInitializing) {
       localStorage.setItem("arch_agent_sessions", JSON.stringify(sessions));
+      // Debounced sync or immediate for critical changes
+      syncWithSupabase(sessions);
     }
-  }, [sessions]);
+  }, [sessions, isInitializing]);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -426,7 +528,12 @@ export default function OrchestrationPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     localStorage.removeItem("auth_token");
     navigate("/");
   };
@@ -463,16 +570,8 @@ export default function OrchestrationPage() {
         )}
       </AnimatePresence>
 
-      <Waves className="opacity-30" />
-      <AnoAI />
-      {/* Subtle Architectural Backdrop */}
-      <div 
-        className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none bg-repeat"
-        style={{ 
-          backgroundImage: "url('https://www.transparenttextures.com/patterns/cubes.png')",
-        }}
-      />
-
+      {/* Dynamic Background Removed from Global */}
+      
       {/* Sidebar - Collapsible */}
       <AnimatePresence mode="wait">
         {isSidebarOpen && (
@@ -592,8 +691,12 @@ export default function OrchestrationPage() {
                     <AvatarFallback className="bg-white/10 text-xs font-bold"><UserProfileLogo /></AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold tracking-tight">John Doe</span>
-                    <span className="text-[10px] text-white/40 font-medium uppercase tracking-wider">Enterprise Plan</span>
+                    <span className="text-sm font-bold tracking-tight truncate max-w-[120px]">
+                      {user?.email?.split('@')[0] || "Architect"}
+                    </span>
+                    <span className="text-[10px] text-white/40 font-medium uppercase tracking-wider truncate max-w-[120px]">
+                      {user?.email || "Enterprise Access"}
+                    </span>
                   </div>
                 </div>
                 <Button 
@@ -657,19 +760,14 @@ export default function OrchestrationPage() {
                       { id: "cost", label: "Estimation", icon: IndianRupee },
                       { id: "visual", label: "Visualizer", icon: ImageIcon }
                     ].map((tab) => (
-                      <button
+                      <ProjectTab
                         key={tab.id}
+                        id={tab.id}
+                        label={tab.label}
+                        icon={tab.icon}
+                        active={activeTab === tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all",
-                          activeTab === tab.id 
-                            ? "bg-white text-black shadow-lg" 
-                            : "text-white/40 hover:text-white hover:bg-white/5"
-                        )}
-                      >
-                        <tab.icon className="h-4 w-4" />
-                        {tab.label}
-                      </button>
+                      />
                     ))}
                   </div>
                 </div>
@@ -685,16 +783,17 @@ export default function OrchestrationPage() {
               <section className="flex-1 flex overflow-hidden">
                 {/* View: Architect Chatbot */}
                 {activeTab === "chat" && (
-                  <div className="flex-1 flex flex-col bg-black/10 backdrop-blur-sm relative">
-                    <div className="p-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md z-10">
+                  <div className="flex-1 flex flex-col bg-black overflow-hidden relative text-white">
+                    <InteractiveWaveShader />
+                    <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/80 backdrop-blur-md z-10 shrink-0">
                       <div className="flex items-center gap-3">
-                        <Sparkles className="h-4 w-4 text-white/40" />
-                        <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/40">Technical Design Partner</h2>
+                        <Sparkles className="h-4 w-4 text-white/30" />
+                        <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/30">Technical Design Partner</h2>
                       </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-6 scroll-smooth scrollbar-thin scrollbar-thumb-white/10" ref={scrollRef}>
-                      <div className="space-y-8 max-w-2xl mx-auto py-10">
+                      <div className="space-y-8 max-w-2xl mx-auto py-10 relative z-10">
                         <AnimatePresence initial={false}>
                           {currentSession.messages.length === 0 && (
                             <motion.div 
@@ -702,16 +801,16 @@ export default function OrchestrationPage() {
                               animate={{ opacity: 1, y: 0 }}
                               className="flex flex-col items-center justify-center h-[50vh] text-center space-y-8"
                             >
-                              <div className="h-24 w-24 rounded-[2.5rem] bg-white/5 flex items-center justify-center border border-white/10 shadow-2xl relative">
-                                <Bot className="h-10 w-10 text-white/20" />
+                              <div className="h-24 w-24 rounded-[2.5rem] bg-black flex items-center justify-center border border-white/10 shadow-2xl relative">
+                                <Bot className="h-10 w-10 text-white/40" />
                                 <motion.div 
                                   animate={{ scale: [1, 1.2, 1], opacity: [0, 0.2, 0] }}
                                   transition={{ repeat: Infinity, duration: 3 }}
-                                  className="absolute inset-0 rounded-[2.5rem] bg-white blur-2xl"
+                                  className="absolute inset-0 rounded-[2.5rem] bg-white/20 blur-2xl"
                                 />
                               </div>
                               <div className="space-y-4">
-                                <h3 className="text-4xl font-extrabold tracking-tight">Your vision, automated.</h3>
+                                <h3 className="text-4xl font-extrabold tracking-tight text-white">Your vision, automated.</h3>
                                 <p className="text-white/40 max-w-sm mx-auto text-base leading-relaxed font-light">"Architecture is the learned game, correct and magnificent, of forms assembled in the light."</p>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
@@ -724,10 +823,10 @@ export default function OrchestrationPage() {
                                   <button
                                     key={item.label}
                                     onClick={() => handleSend(item.prompt)}
-                                    className="text-left p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
+                                    className="text-left p-5 rounded-2xl bg-black border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
                                   >
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mb-2 group-hover:text-white transition-colors">{item.label}</div>
-                                    <div className="text-xs text-white/40 group-hover:text-white/80 transition-colors">Start designing this concept →</div>
+                                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-2 group-hover:text-white transition-colors">{item.label}</div>
+                                    <div className="text-xs text-white/60 group-hover:text-white transition-colors">Start designing this concept →</div>
                                   </button>
                                 ))}
                               </div>
@@ -747,14 +846,14 @@ export default function OrchestrationPage() {
                                   msg.role === "user" ? "flex-row-reverse" : "flex-row"
                                 )}
                               >
-                                <Avatar className={cn("h-10 w-10 border border-white/10 shadow-2xl shrink-0", msg.role === "user" ? "bg-white text-black" : "bg-white/10")}>
+                                <Avatar className={cn("h-10 w-10 border border-white/10 shadow-2xl shrink-0", msg.role === "user" ? "bg-black text-white" : "bg-black text-white/40")}>
                                   <AvatarFallback className="text-xs font-bold font-mono uppercase tracking-tighter">{msg.role === "user" ? "USR" : "AGT"}</AvatarFallback>
                                 </Avatar>
                                 <div className={cn(
-                                  "group p-6 rounded-[1.75rem] max-w-[85%] text-[14px] leading-relaxed shadow-2xl border backdrop-blur-3xl relative transition-all",
+                                  "group p-6 rounded-[2rem] max-w-[85%] text-[15px] leading-relaxed shadow-2xl relative transition-all",
                                   msg.role === "user" 
-                                    ? "bg-white text-black font-semibold border-white/20 rounded-tr-[4px]" 
-                                    : "bg-white/5 border-white/10 text-white/90 rounded-tl-[4px] font-medium"
+                                    ? "bg-black text-white backdrop-blur-xl border border-white/10 font-medium rounded-tr-[4px]" 
+                                    : "bg-black text-white border border-white/20 rounded-tl-[4px] font-medium shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
                                 )}>
                                   {msg.parts[0].text}
                                   <button
@@ -766,8 +865,8 @@ export default function OrchestrationPage() {
                                     className={cn(
                                       "absolute bottom-2 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-xl backdrop-blur-md border border-white/10 hover:border-white/30",
                                       msg.role === "user" 
-                                        ? "-left-14 text-white/30 hover:text-white bg-white/5" 
-                                        : "-right-14 text-white/30 hover:text-white bg-white/5"
+                                        ? "-left-14 text-white/50 hover:text-white bg-white/10" 
+                                        : "-right-14 text-white/50 hover:text-white bg-white/10"
                                     )}
                                   >
                                     {copiedId === msgId ? <Check className="h-3.5 w-3.5 text-[#A8FF00]" /> : <Copy className="h-3.5 w-3.5" />}
@@ -778,27 +877,27 @@ export default function OrchestrationPage() {
                           })}
 
                           {streamingText && (
-                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex gap-4">
-                              <Avatar className="h-10 w-10 border border-white/10 bg-white/10 shrink-0">
-                                <AvatarFallback className="text-xs font-bold font-mono">AGT</AvatarFallback>
+                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex gap-4 relative z-10">
+                              <Avatar className="h-10 w-10 border border-white/10 bg-white/5 shrink-0">
+                                <AvatarFallback className="text-xs font-bold font-mono text-white/40">AGT</AvatarFallback>
                               </Avatar>
-                              <div className="p-6 rounded-[1.75rem] rounded-tl-[4px] bg-white/5 border border-white/5 text-white/90 font-medium italic leading-relaxed text-[14px] backdrop-blur-3xl shadow-2xl max-w-[85%]">
+                              <div className="p-6 rounded-[2rem] rounded-tl-[4px] bg-black text-white font-medium leading-relaxed text-[15px] shadow-2xl max-w-[85%] border border-white/20">
                                 {streamingText}
                                 <motion.span 
                                   animate={{ opacity: [0, 1, 0] }} 
                                   transition={{ repeat: Infinity, duration: 0.8 }}
-                                  className="inline-block w-1 h-3.5 bg-[#A8FF00] ml-1 align-middle"
+                                  className="inline-block w-1 h-3.5 bg-white ml-1 align-middle"
                                 />
                               </div>
                             </motion.div>
                           )}
 
                           {isLoading && !streamingText && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
-                               <Avatar className="h-10 w-10 border border-white/10 bg-white/10 shrink-0">
-                                <AvatarFallback className="text-xs font-bold font-mono">AGT</AvatarFallback>
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4 relative z-10">
+                               <Avatar className="h-10 w-10 border border-white/10 bg-white/5 shrink-0">
+                                <AvatarFallback className="text-xs font-bold font-mono text-white/40">AGT</AvatarFallback>
                               </Avatar>
-                              <div className="p-6 rounded-[1.75rem] rounded-tl-[4px] bg-white/5 border border-white/5 flex items-center gap-1.5 min-w-[80px]">
+                              <div className="p-6 rounded-[2rem] rounded-tl-[4px] bg-black text-white border border-white/20 flex items-center gap-1.5 min-w-[80px] shadow-2xl">
                                 <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1 h-1 bg-white rounded-full" />
                                 <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1 h-1 bg-white rounded-full" />
                                 <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1 h-1 bg-white rounded-full" />
@@ -809,7 +908,7 @@ export default function OrchestrationPage() {
                       </div>
                     </div>
 
-                    <div className="p-8 bg-gradient-to-t from-black via-black/80 to-transparent">
+                    <div className="p-8 bg-gradient-to-t from-black via-black/80 to-transparent relative z-10">
                       <div className="max-w-2xl mx-auto relative group">
                         <div className="relative group">
                           <ChatGPTInput
@@ -818,7 +917,7 @@ export default function OrchestrationPage() {
                             onSubmit={() => handleSend()}
                             placeholder="Collaborate with your Architect agent..."
                             disabled={isLoading}
-                            className="w-full"
+                            className="w-full bg-black border-white/20 text-white shadow-2xl backdrop-blur-xl"
                           />
                         </div>
                       </div>
@@ -829,11 +928,12 @@ export default function OrchestrationPage() {
 
           {/* View: Cost Breakdown */}
           {activeTab === "cost" && (
-            <div className="flex-1 flex flex-col bg-black/30 backdrop-blur-2xl">
-              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md">
+            <div className="flex-1 flex flex-col bg-black overflow-hidden relative text-white">
+              <InteractiveWaveShader />
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/80 backdrop-blur-md shrink-0 z-10">
                 <div className="flex items-center gap-3">
-                  <IndianRupee className="h-4 w-4 text-white/40" />
-                  <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/40">Cost Breakdown</h2>
+                  <IndianRupee className="h-4 w-4 text-white/30" />
+                  <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/30">Cost Breakdown</h2>
                 </div>
                 <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20">
                    <span className="text-xs font-black text-green-400 tracking-tight">
@@ -844,8 +944,9 @@ export default function OrchestrationPage() {
                 </div>
               </div>
 
-              <div className="px-8 pt-6 max-w-3xl mx-auto w-full">
-                <div className="relative">
+              <div className="flex-1 overflow-y-auto pb-24 scrollbar-thin scrollbar-thumb-white/10">
+                <div className="px-8 pt-6 max-w-3xl mx-auto w-full relative z-10">
+                <div className="relative group">
                   <Input
                     placeholder="Add budget or constraints (e.g. 'Budget $5k')"
                     value={costInput}
@@ -856,12 +957,12 @@ export default function OrchestrationPage() {
                         setCostInput("");
                       }
                     }}
-                    className="bg-white/5 border-white/10 h-10 rounded-xl text-xs pr-10"
+                    className="bg-black text-white h-12 rounded-2xl text-sm pr-12 font-medium shadow-2xl border border-white/20 focus-visible:ring-offset-0 focus-visible:ring-white/10 placeholder:text-white/20 backdrop-blur-md"
                   />
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="absolute right-1 top-1 h-8 w-8 text-white/40 hover:text-white"
+                    className="absolute right-1 top-1 h-10 w-10 text-white/40 hover:text-white hover:bg-white/5 transition-colors rounded-xl"
                     onClick={() => {
                       if (currentSession?.designPrompt) {
                         handleEstimateCost(currentSession.designPrompt, costInput);
@@ -869,31 +970,31 @@ export default function OrchestrationPage() {
                       }
                     }}
                   >
-                    <Send className="h-3 w-3" />
+                    <Send className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              <ScrollArea className="flex-1 p-8 max-w-4xl mx-auto w-full">
+              <div className="flex-1 p-8 max-w-4xl mx-auto w-full">
                 {isEstimatingCost ? (
                   <div className="flex flex-col items-center justify-center py-32 space-y-6">
                     <LoadingBreadcrumb text="Parsing Material Data..." className="text-white scale-125" />
                   </div>
                 ) : currentSession?.costBreakdown ? (
-                  <div className="space-y-10">
+                  <div className="space-y-12">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       {["Material", "Labor", "Contingency"].map((cat) => {
                         const items = currentSession.costBreakdown!.items.filter(i => i.category === cat);
                         if (items.length === 0) return null;
                         return (
-                          <div key={cat} className="space-y-4">
+                          <div key={cat} className="space-y-5">
                             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 ml-2">{cat}s</h3>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                               {items.map((item, idx) => (
-                                <div key={idx} className="p-5 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all hover:translate-x-1">
+                                <div key={idx} className="p-6 rounded-[2rem] bg-black border border-white/10 text-white shadow-xl flex items-center justify-between group hover:scale-[1.02] transition-all duration-300 backdrop-blur-md">
                                   <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-bold tracking-tight">{item.item}</span>
-                                    <span className="text-[10px] text-white/30 font-medium uppercase tracking-wider">{item.quantity} × ₹{item.unitPrice.toLocaleString('en-IN')}</span>
+                                    <span className="text-[15px] font-bold tracking-tight">{item.item}</span>
+                                    <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">{item.quantity} × ₹{item.unitPrice.toLocaleString('en-IN')}</span>
                                   </div>
                                   <span className="text-sm font-black tracking-tighter">₹{item.total.toLocaleString('en-IN')}</span>
                                 </div>
@@ -906,54 +1007,56 @@ export default function OrchestrationPage() {
 
                     <Separator className="bg-white/10" />
 
-                    <div className="p-8 rounded-[2rem] bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/10 shadow-2xl max-w-md mx-auto">
+                    <div className="p-10 rounded-[3rem] bg-black border border-white/20 text-white shadow-[0_20px_60px_rgba(0,0,0,0.3)] max-w-md mx-auto text-center backdrop-blur-xl">
                       <div className="flex flex-col gap-6">
-                        <div className="flex flex-col text-center">
+                        <div className="flex flex-col">
                           <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Total Estimated Investment</span>
-                          <span className="text-7xl font-black tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                          <span className="text-6xl font-black tracking-tighter text-white">
                             ₹ {currentSession.costBreakdown.totalEstimate.toLocaleString('en-IN')}
                           </span>
                         </div>
-                        <div className="flex items-center gap-4 text-[10px] text-white/20 font-medium leading-relaxed border-t border-white/5 pt-6">
-                          <div className="h-2 w-2 rounded-full bg-green-500/40" />
-                          <span>Prices are algorithmic estimates based on specs.</span>
+                        <div className="flex items-center justify-center gap-4 text-[10px] text-white/50 font-bold leading-relaxed border-t border-white/5 pt-6">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          <span>ALGORITHMIC ESTIMATE BASED ON SPECS</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6 text-white/10">
-                    <div className="h-24 w-24 rounded-[2.5rem] bg-white/5 flex items-center justify-center border border-white/5">
-                      <IndianRupee className="h-12 w-12" />
+                  <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6 text-white/10 relative z-10">
+                    <div className="h-24 w-24 rounded-[2.5rem] bg-black flex items-center justify-center border border-white/20 shadow-2xl">
+                      <IndianRupee className="h-12 w-12 text-white/40" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-xl font-bold tracking-tight text-white/20">Awaiting Specifications</h3>
-                      <p className="text-xs max-w-[220px] mx-auto leading-relaxed">Please use the chat assistant first to generate a design concept.</p>
+                      <p className="text-xs max-w-[220px] mx-auto leading-relaxed text-white/40">Please use the chat assistant first to generate a design concept.</p>
                       <Button variant="link" onClick={() => setActiveTab("chat")} className="text-white/40 hover:text-white mt-4">Go to Chat</Button>
                     </div>
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* View: Visualizer */}
           {activeTab === "visual" && (
-            <div className="flex-1 flex flex-col bg-black/20 backdrop-blur-xl">
-              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md">
+            <div className="flex-1 flex flex-col bg-black overflow-hidden relative text-white">
+              <InteractiveWaveShader />
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/80 backdrop-blur-md shrink-0 z-10">
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-3">
-                    <ImageIcon className="h-4 w-4 text-white/40" />
-                    <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/40">Generated Design</h2>
+                    <ImageIcon className="h-4 w-4 text-white/30" />
+                    <h2 className="font-bold text-xs uppercase tracking-[0.2em] text-white/30">Generated Design</h2>
                   </div>
-                  <div className="flex items-center bg-white/5 rounded-lg p-1 border border-white/10">
+                  <div className="flex items-center bg-black rounded-lg p-1 border border-white/20 shadow-xl">
                     {(["1K", "2K", "4K"] as const).map((size) => (
                       <button
                         key={size}
                         onClick={() => setImageSize(size)}
                         className={cn(
                           "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
-                          imageSize === size ? "bg-white text-black shadow-lg" : "text-white/40 hover:text-white"
+                          imageSize === size ? "bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]" : "text-white/40 hover:text-white"
                         )}
                       >
                         {size}
@@ -968,45 +1071,52 @@ export default function OrchestrationPage() {
                 )}
               </div>
 
-              {/* ── Style Preset Selector (from StudioAI) ── */}
-              <div className="px-8 pt-5 pb-3 border-b border-white/5 bg-black/10">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Palette className="h-3.5 w-3.5 text-cyan-400" />
-                    <label className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/30">Style Preset</label>
+              <div className="flex-1 overflow-y-auto pb-24 scrollbar-thin scrollbar-thumb-white/10">
+                {/* ── Style Preset Selector ── */}
+                <div className="px-8 pt-8 pb-10 space-y-4 relative z-10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Palette className="h-3.5 w-3.5 text-white/20" />
+                      <label className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/30">Aesthetic Presets</label>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-cyan-400 font-semibold italic">{selectedStyle.name} Selected</span>
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    {STYLE_PRESETS.map((style) => (
+                      <button
+                        key={style.id}
+                        onClick={() => setSelectedStyle(style)}
+                        className={cn(
+                          "p-4 rounded-[2rem] flex flex-col items-center gap-3 transition-all duration-300 relative overflow-hidden group border",
+                          selectedStyle.id === style.id
+                            ? "bg-black text-white border-white/40 shadow-[0_10px_40px_rgba(255,255,255,0.1)] scale-105"
+                            : "bg-black text-white/40 border-white/10 hover:bg-black hover:text-white hover:border-white/20"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center transition-colors relative z-10",
+                          selectedStyle.id === style.id ? "bg-white/10" : "bg-white/5"
+                        )}>
+                          <style.icon className="h-4 w-4" />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest relative z-10">{style.name}</span>
+                        {selectedStyle.id === style.id && (
+                          <motion.div layoutId="preset-indicator" className="absolute inset-0 border-2 border-white/50 rounded-[2rem] pointer-events-none" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                  {STYLE_PRESETS.map((style) => (
-                    <button
-                      key={style.id}
-                      onClick={() => setSelectedStyle(style)}
-                      className={cn(
-                        "py-2 px-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-200",
-                        selectedStyle.id === style.id
-                          ? "bg-cyan-500/15 border border-cyan-400/30 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.15)]"
-                          : "bg-white/5 border border-white/5 text-white/40 hover:border-white/20 hover:text-white/70"
-                      )}
-                      title={style.description}
-                      id={`style-${style.id}`}
-                    >
-                      {style.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {!currentSession?.designPrompt ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-                  <div className="h-24 w-24 rounded-[2.5rem] bg-white/5 flex items-center justify-center border border-white/10 shadow-2xl relative">
-                    <ImageIcon className="h-12 w-12 text-white/10" />
-                    <Bot className="h-6 w-6 text-white/40 absolute -bottom-2 -right-2" />
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
+                  <div className="h-24 w-24 rounded-[2.5rem] bg-black flex items-center justify-center border border-white/20 shadow-2xl relative">
+                    <ImageIcon className="h-12 w-12 text-white/20" />
+                    <Bot className="h-6 w-6 text-white/60 absolute -bottom-2 -right-2" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-2xl font-extrabold tracking-tight">Image Gen model offline</h3>
+                    <h3 className="text-2xl font-extrabold tracking-tight text-white">Awaiting Visual Vision</h3>
                     <p className="text-white/40 max-w-sm mx-auto text-sm leading-relaxed italic">
-                      "Use chat to describe your idea"
+                      "Use chat to describe your idea, then finalize the visual render here."
                     </p>
                     <div className="pt-4">
                       <Button 
@@ -1019,83 +1129,149 @@ export default function OrchestrationPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 p-8 flex flex-col gap-8 overflow-y-auto max-w-5xl mx-auto w-full">
-                  <Card className="bg-white/5 border-white/10 text-white overflow-hidden rounded-3xl shadow-2xl shrink-0">
-                    <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-                      <CardTitle className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">Technical Design Prompt</CardTitle>
+                <div className="flex-1 p-8 flex flex-col gap-10 max-w-5xl mx-auto w-full relative z-10">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-4 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center text-black shadow-lg">
+                          <Bot className="h-4 w-4" />
+                        </div>
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Technical Design Concept</span>
+                      </div>
                       <Button 
                         variant="ghost" 
                         size="icon" 
                         onClick={() => copyToClipboard(currentSession.designPrompt!)}
-                        className="h-6 w-6 rounded-lg hover:bg-white/10"
+                        className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all shadow-lg"
                       >
-                        {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3 text-white/40" />}
+                        {copied ? <Check className="h-4 w-4 text-[#A8FF00]" /> : <Copy className="h-4 w-4" />}
                       </Button>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <div className="max-h-24 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                        <p className="text-xs font-mono text-white/60 leading-relaxed italic bg-black/20 p-3 rounded-xl border border-white/5">
-                          "{currentSession.designPrompt}"
-                        </p>
+                    </div>
+                    
+                    <div className="p-8 rounded-[2.5rem] bg-black text-white shadow-[0_20px_50px_rgba(255,255,255,0.1)] relative overflow-hidden group backdrop-blur-xl border border-white/10">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Palette className="h-32 w-32 -rotate-12 text-white" />
                       </div>
-                      {(!currentSession.designImages || currentSession.designImages.length === 0) && !isGeneratingImage && (
-                        <div className="mt-3">
-                           <Button 
-                            onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
-                            className="bg-white text-black hover:bg-white/90 w-full rounded-lg text-xs font-bold h-9"
-                          >
-                            Generate 4 Design Variants
-                          </Button>
+                      <p className="text-[17px] font-medium leading-[1.6] tracking-tight relative z-10 antialiased text-white">
+                        {currentSession.designPrompt}
+                      </p>
+                      
+                      <div className="mt-8 flex flex-wrap gap-2 relative z-10 pt-6 border-t border-white/10">
+                        <div className="px-4 py-1.5 rounded-full bg-black border border-white/20 text-white text-[10px] font-bold uppercase tracking-widest">
+                          {selectedStyle.name}
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        <div className="px-4 py-1.5 rounded-full bg-white/10 border border-white/5 text-white text-[10px] font-black uppercase tracking-widest">
+                          {imageSize} RESOLUTION
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* ── Thumbnail Gallery: 4 Variants ── */}
+                    {(!currentSession.designImages || currentSession.designImages.length === 0) && !isGeneratingImage && (
+                      <div className="pt-4 flex justify-center">
+                         <Button 
+                          onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
+                          className="bg-white text-black hover:bg-white/90 h-14 px-10 rounded-2xl text-md font-black shadow-2xl transition-all active:scale-95 group"
+                        >
+                          <Sparkles className="h-5 w-5 mr-3 group-hover:animate-pulse" />
+                          Finalize Visual Render
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   {isGeneratingImage && (
-                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
-                      <LoadingBreadcrumb text="Generating 4 Design Variants..." className="text-white scale-125" />
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-bold">This may take 15–30 seconds</p>
+                    <div className="flex flex-col items-center justify-center py-20 space-y-6 relative z-10">
+                      <div className="relative h-32 w-32 mb-4">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
+                          className="absolute inset-0 rounded-[2.5rem] border-2 border-dashed border-white/20"
+                        />
+                        <motion.div 
+                          animate={{ rotate: -360 }}
+                          transition={{ repeat: Infinity, duration: 12, ease: "linear" }}
+                          className="absolute inset-4 rounded-[2rem] border-2 border-dashed border-[#A8FF00]/40"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Bot className="h-8 w-8 text-white/40" />
+                        </div>
+                      </div>
+                      <LoadingBreadcrumb text="Simulating 4 Architectural Variations..." className="text-white scale-125" />
+                      <p className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-bold animate-pulse">Running Neural Rendering Engine v4.2</p>
                     </div>
                   )}
 
                   {!isGeneratingImage && currentSession.designImages && currentSession.designImages.length > 0 && (
-                    <div className="shrink-0 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
-                          Select Your Favorite — {currentSession.designImages.length} Variants
-                        </h3>
+                    <div className="shrink-0 space-y-6 relative z-10">
+                      <div className="flex items-center justify-between px-2">
+                        <div className="flex items-center gap-4">
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">
+                            Design Matrix <span className="text-white/20 ml-2">[{currentSession.designImages.length} DESIGNS]</span>
+                          </h3>
+                        </div>
                         <Button 
                           onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
                           disabled={isGeneratingImage}
                           size="sm"
-                          className="h-7 text-[10px] tracking-wider uppercase font-bold bg-white/10 text-white hover:bg-white/20 border border-white/10"
+                          className="h-10 px-6 text-[10px] tracking-widest uppercase font-black bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 rounded-xl transition-all"
                         >
-                          ⟳ Regenerate All
+                          ⟳ Regenerate Collection
                         </Button>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-2">
                         {currentSession.designImages.map((img, idx) => (
                           <motion.div
                             key={idx}
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                            whileHover={{ y: -8, scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => updateSession(currentSessionId!, { designImage: img })}
                             className={cn(
-                              "relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all aspect-square shadow-lg",
+                              "relative group rounded-[2.5rem] overflow-hidden border-2 cursor-pointer transition-all aspect-square shadow-2xl",
                               currentSession.designImage === img 
-                                ? "border-[#A8FF00] shadow-[0_0_25px_rgba(168,255,0,0.25)] ring-2 ring-[#A8FF00]/20" 
-                                : "border-white/10 hover:border-white/30 opacity-60 hover:opacity-100"
+                                ? "border-[#A8FF00] shadow-[#A8FF00]/10 ring-4 ring-[#A8FF00]/10 scale-[1.03] z-10" 
+                                : "border-white/5 hover:border-white/20 grayscale-[0.4] hover:grayscale-0"
                             )}
                           >
                             <img src={img} alt={`Design variant ${idx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                            
+                            <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedImage(img);
+                                }}
+                                className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/40"
+                              >
+                                <Maximize size={14} />
+                              </button>
+                            </div>
+
                             {currentSession.designImage === img && (
-                              <div className="absolute top-2 right-2 bg-[#A8FF00] text-black rounded-full p-1.5 shadow-lg">
-                                <Check className="h-3 w-3" />
+                              <div className="absolute top-4 left-4 bg-[#A8FF00] text-black rounded-full px-3 py-1 font-black text-[9px] tracking-[0.1em] shadow-[0_0_20px_rgba(168,255,0,0.4)]">
+                                SELECTED
                               </div>
                             )}
-                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-8">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">Variant {idx + 1}</span>
+
+                            <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between translate-y-2 group-hover:translate-y-0 transition-transform">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Variant</span>
+                                <span className="text-2xl font-black text-[#A8FF00]">0{idx + 1}</span>
+                              </div>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEnterRoom(img);
+                                }}
+                                className="h-10 w-10 rounded-full bg-[#A8FF00] text-black flex items-center justify-center shadow-lg hover:scale-110 transition-all"
+                              >
+                                <Sparkles size={16} />
+                              </button>
                             </div>
                           </motion.div>
                         ))}
@@ -1103,57 +1279,64 @@ export default function OrchestrationPage() {
                     </div>
                   )}
 
-                  {/* ── Selected Design Preview + Enter Room (StudioAI 3D View) ── */}
                   {currentSession.designImage && !isGeneratingImage && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">Selected Design Preview</h3>
-                        <div className="flex items-center gap-2">
+                    <div className="space-y-6 relative z-10 pt-10 border-t border-white/5">
+                      <div className="flex items-end justify-between px-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Active Selection</span>
+                          <h3 className="text-xl font-bold text-white tracking-tight">Main Visualization Focus</h3>
+                        </div>
+                        <div className="flex items-center gap-3">
                           <Button 
                             onClick={() => handleEnterRoom(currentSession.designImage!)} 
-                            size="sm" 
-                            className="h-7 text-[10px] tracking-wider uppercase font-bold bg-[#A8FF00] text-black hover:bg-[#8CD300] transition-colors"
+                            className="bg-[#A8FF00] text-black hover:bg-[#8CD300] h-12 px-8 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_8px_25px_rgba(168,255,0,0.2)] transition-all active:scale-95"
                           >
-                            Enter Room
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            3D Immersive Flow
                           </Button>
                         </div>
                       </div>
                     
-                      <div 
-                        className="flex-[2] relative rounded-[2.5rem] overflow-hidden border border-white/10 bg-white/5 min-h-[500px] group shadow-2xl cursor-pointer"
-                        onClick={() => {
-                            if (currentSession?.designImage) {
-                              setSelectedImage(currentSession.designImage);
-                            }
-                          }}>
+                      <motion.div 
+                        layoutId="active-image"
+                        className="relative rounded-[3rem] overflow-hidden border border-white/10 bg-black min-h-[500px] group shadow-[0_40px_100px_rgba(0,0,0,0.5)] cursor-pointer"
+                        onClick={() => setSelectedImage(currentSession.designImage!)}
+                      >
                         <img 
                           src={currentSession.designImage} 
-                          alt="Selected Design" 
-                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                          alt="Main Selection" 
+                          className="w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-105"
                           referrerPolicy="no-referrer"
                         />
-                      </div>
-                    </>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-40" />
+                        <div className="absolute bottom-10 left-10 flex flex-col gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#A8FF00]">Master Visual</span>
+                          <p className="text-white/60 text-xs font-medium max-w-md line-clamp-2 italic">
+                            "{currentSession.designPrompt}"
+                          </p>
+                        </div>
+                      </motion.div>
+                    </div>
                   )}
 
-                  {/* Empty state when no images yet and not generating */}
                   {!currentSession.designImage && !isGeneratingImage && (!currentSession.designImages || currentSession.designImages.length === 0) && (
-                    <div className="flex-[2] relative rounded-[2.5rem] overflow-hidden border border-white/10 bg-white/5 min-h-[500px] flex items-center justify-center">
-                      <div className="flex flex-col items-center text-white/10">
-                        <ImageIcon className="h-24 w-24 mb-6 opacity-50" />
-                        <p className="text-sm font-bold uppercase tracking-[0.2em]">Visualization Engine Ready</p>
+                    <div className="flex-[2] relative rounded-[2.5rem] overflow-hidden border border-white/10 bg-black min-h-[500px] flex items-center justify-center relative z-10">
+                      <div className="flex flex-col items-center text-white/20">
+                        <ImageIcon className="h-24 w-24 mb-6 opacity-40" />
+                        <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/40">Visualization Engine Ready</p>
                       </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
         </section>
           </motion.div>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-black/40 backdrop-blur-xl">
-            <LoadingBreadcrumb text="Initializing Agent Intelligence..." />
+          <div className="flex-1 flex items-center justify-center bg-black/80 backdrop-blur-xl">
+            <LoadingBreadcrumb text="Initializing Agent Intelligence..." className="text-white" />
           </div>
         )}
       </AnimatePresence>

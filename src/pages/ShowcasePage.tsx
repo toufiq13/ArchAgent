@@ -16,36 +16,44 @@ const ARCH_IMAGES = [
 
 const TEMPLATE_DATA: Record<string, string[]> = {
   door: [
-    "https://images.unsplash.com/photo-1506377295352-e3154d43ea9e?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1527030280862-64139fba04ca?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1505691938895-1758d7eaa511?auto=format&fit=crop&w=400&q=80"
+    "https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1510133465104-517711200676?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1544436034-7a9ed4e02256?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1541604193435-22077a11bd44?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1491897554428-130a60dd4757?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=800&q=80"
   ],
   ceiling: [
-    "https://image.pollinations.ai/prompt/luxury-modern-tray-ceiling-led-lighting?width=400&height=400&nologo=true&seed=1",
-    "https://image.pollinations.ai/prompt/minimalist-wood-beam-ceiling-design?width=400&height=400&nologo=true&seed=2",
-    "https://image.pollinations.ai/prompt/architectural-concrete-ceiling-loft?width=400&height=400&nologo=true&seed=3",
-    "https://image.pollinations.ai/prompt/coffered-ceiling-classic-luxury?width=400&height=400&nologo=true&seed=4"
+    "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1505693333148-5d334546a5c1?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1544450297-765586618451?auto=format&fit=crop&w=800&q=80"
   ],
   wall: [
-    "https://image.pollinations.ai/prompt/modern-wall-paneling-wood-texture?width=400&height=400&nologo=true&seed=5",
-    "https://image.pollinations.ai/prompt/abstract-geometric-3d-wall-art?width=400&height=400&nologo=true&seed=6",
-    "https://image.pollinations.ai/prompt/exposed-brick-industrial-wall?width=400&height=400&nologo=true&seed=7",
-    "https://image.pollinations.ai/prompt/textured-plaster-minimalist-wall?width=400&height=400&nologo=true&seed=8"
+    "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1510074377623-8cf13fb86c08?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1582531668704-5154376378ba?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=800&q=80"
   ],
   tv: [
-    "https://image.pollinations.ai/prompt/modern-tv-wall-showcase-minimalist?width=400&height=400&nologo=true&seed=9",
-    "https://image.pollinations.ai/prompt/luxury-media-center-floating-shelves?width=400&height=400&nologo=true&seed=10",
-    "https://image.pollinations.ai/prompt/industrial-tv-entertainment-unit?width=400&height=400&nologo=true&seed=11",
-    "https://image.pollinations.ai/prompt/integrated-tv-cabinetry-living-room?width=400&height=400&nologo=true&seed=12"
+    "https://images.unsplash.com/photo-1593784991095-a20503947506?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1583847268964-b28dc2f51ac9?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1567537234907-f6551b9e585f?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1629079447841-d8ec9212000d?auto=format&fit=crop&w=800&q=80"
   ],
   window: [
-    "https://image.pollinations.ai/prompt/modern-interior-window-natural-light?width=400&height=400&nologo=true&seed=1",
-    "https://image.pollinations.ai/prompt/floor-to-ceiling-glass-window-scenic?width=400&height=400&nologo=true&seed=2",
-    "https://image.pollinations.ai/prompt/minimalist-window-frame-architecture?width=400&height=400&nologo=true&seed=3",
-    "https://image.pollinations.ai/prompt/circular-architectural-window-design?width=400&height=400&nologo=true&seed=4"
+    "https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600608848244-9d4211d3302c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1600566752355-3979ff1040ad?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1464938050520-ef2270bb8ce8?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1449156001437-3a16639eb2ab?auto=format&fit=crop&w=800&q=80"
   ]
 };
 

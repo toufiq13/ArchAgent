@@ -117,65 +117,120 @@ async function startServer() {
   // ─── Image Generation ───────────────────────────────────────────
   const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
+  async function fetchWithRetry(url: string, options: any = {}, retries = 3, backoff = 1500): Promise<Response> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options);
+        if (response.ok) return response;
+        
+        // Handle Rate Limiting (429) specifically
+        if (response.status === 429) {
+          const wait = backoff * Math.pow(2, i) + Math.random() * 1500;
+          console.warn(`[Image] Provider rate limited (429). Retrying in ${wait.toFixed(0)}ms... attempt ${i + 1}/${retries}`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+
+        // Handle Overloaded/Busy (503) specifically for HF
+        if (response.status === 503) {
+          const wait = 3000 * Math.pow(1.5, i);
+          console.warn(`[Image] HF model loading or busy (503). Waiting ${wait.toFixed(0)}ms...`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+
+        // Return other failures directly to allow the caller to switch providers or return error
+        return response; 
+      } catch (err: any) {
+        if (i === retries - 1) throw err;
+        const wait = backoff * Math.pow(2, i);
+        console.warn(`[Image] Network error: ${err.message}. Retrying in ${wait}ms...`);
+        await new Promise(r => setTimeout(r, wait));
+      }
+    }
+    throw new Error("Maximum retries reached for image provider");
+  }
+
   app.post("/api/generate-image", async (req, res) => {
     const { prompt, seed } = req.body;
     const useSeed = seed || Math.floor(Math.random() * 999999);
 
     try {
-      const fullPrompt = `Architectural photography, professional visualization: ${prompt}, 8k, photorealistic, cinematic lighting, highly detailed materials.`;
+      const fullPrompt = `${prompt}, high-end architectural photography, 8k visualization, cinematic lighting, sharp materials, professional architectural render, global illumination, photorealistic.`;
       
-      // OPTION 1: Hugging Face (PRO)
-      if (HF_API_KEY && HF_API_KEY !== "YOUR_HUGGINGFACE_API_KEY") {
-        console.log(`[Image] Generating via Hugging Face (FLUX.1)...`);
+      // ─── OPTION 1: Hugging Face (Primary) ────────────────────────
+      if (HF_API_KEY && HF_API_KEY.trim() !== "" && HF_API_KEY !== "YOUR_HUGGINGFACE_API_KEY") {
+        console.log(`[Image] Pinging HF (FLUX.1-schnell)...`);
+        
         try {
           const response = await fetch(
             "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
             {
               headers: { 
                 Authorization: `Bearer ${HF_API_KEY}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-Wait-For-Model": "true",
+                "X-Use-Cache": "false" 
               },
               method: "POST",
-              body: JSON.stringify({ inputs: fullPrompt, parameters: { seed: useSeed } }),
+              body: JSON.stringify({ 
+                inputs: fullPrompt, 
+                parameters: { 
+                  seed: useSeed,
+                  width: 1024,
+                  height: 1024,
+                  num_inference_steps: 4 
+                } 
+              }),
             }
           );
 
           if (response.ok) {
-            const arrayBuffer = await response.arrayBuffer();
-            const base64 = Buffer.from(arrayBuffer).toString("base64");
-            const mimeType = response.headers.get("content-type") || "image/webp";
-            const dataUrl = `data:${mimeType};base64,${base64}`;
-            console.log(`[Image] ✅ Generated via HF: ${(arrayBuffer.byteLength / 1024).toFixed(0)} KB`);
-            return res.json({ imageUrl: dataUrl, provider: "huggingface" });
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("image")) {
+              const arrayBuffer = await response.arrayBuffer();
+              if (arrayBuffer.byteLength > 1000) { // Verify it's not a tiny placeholder or error bit
+                const base64 = Buffer.from(arrayBuffer).toString("base64");
+                const dataUrl = `data:${contentType};base64,${base64}`;
+                console.log(`[Image] ✅ PRO SUCCESS (HF): ${(arrayBuffer.byteLength / 1024).toFixed(0)} KB`);
+                return res.json({ imageUrl: dataUrl, provider: "huggingface" });
+              }
+            }
+            console.warn(`[Image] HF returned non-image or invalid buffer (Content-Type: ${contentType})`);
           } else {
-            const err = await response.text();
-            console.warn(`[Image] HF failed: ${err.substring(0, 100)}. Falling back to Pollinations.`);
+            console.warn(`[Image] HF Status: ${response.status}`);
           }
-        } catch (hfErr) {
-          console.error("[Image] HF Exception:", hfErr);
+        } catch (hfErr: any) {
+          console.error("[Image] HF Failure:", hfErr.message);
         }
       }
 
-      // OPTION 2: Pollinations (FREE Fallback)
-      console.log(`[Image] Generating via Pollinations.ai (seed=${useSeed})...`);
+      // ─── OPTION 2: Pollinations (Stable Fallback) ───────────────────────
+      console.log(`[Image] Attempting Pollinations (Fallback)...`);
       const encodedPrompt = encodeURIComponent(fullPrompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${useSeed}&width=1024&height=1024&nologo=true`;
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${useSeed}&width=1280&height=1280&nologo=true&enhance=true&model=flux`;
       
-      const pollRes = await fetch(imageUrl);
+      const pollRes = await fetchWithRetry(imageUrl);
+      
       if (!pollRes.ok) {
-        throw new Error(`Pollinations failure: ${pollRes.statusText}`);
+        throw new Error(`Visual rendering failed across all providers (Status: ${pollRes.status})`);
+      }
+
+      const pollContentType = pollRes.headers.get("content-type") || "image/jpeg";
+      if (!pollContentType.includes("image")) {
+        throw new Error("Provider returned invalid content type");
       }
 
       const arrayBuffer = await pollRes.arrayBuffer();
       const base64 = Buffer.from(arrayBuffer).toString("base64");
-      const mimeType = pollRes.headers.get("content-type") || "image/jpeg";
-      const dataUrl = `data:${mimeType};base64,${base64}`;
+      const dataUrl = `data:${pollContentType};base64,${base64}`;
 
-      console.log(`[Image] ✅ Generated via Pollinations: ${(arrayBuffer.byteLength / 1024).toFixed(0)} KB`);
+      console.log(`[Image] ✅ FALLBACK SUCCESS (Pollinations): ${(arrayBuffer.byteLength / 1024).toFixed(0)} KB`);
       res.json({ imageUrl: dataUrl, provider: "pollinations" });
+      
     } catch (e: any) {
-      console.error("[Image] Error:", e.message);
-      res.status(500).json({ error: e.message });
+      console.error("[Image] PIPELINE_CRASH:", e.message);
+      res.status(500).json({ error: "Architectural synthesis failed. Our rendering cluster is currently under high load." });
     }
   });
 
@@ -185,6 +240,7 @@ async function startServer() {
       gemini: !!ai,
       huggingface: !!(HF_API_KEY && HF_API_KEY !== "YOUR_HUGGINGFACE_API_KEY"),
       twentyfirst: !!(process.env.API_KEY_21ST && process.env.API_KEY_21ST !== "YOUR_21ST_API_KEY"),
+      supabase: !!(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_URL.includes("supabase.co")),
       environment: process.env.NODE_ENV || "development"
     });
   });

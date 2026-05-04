@@ -9,6 +9,7 @@ import {
 import { EffectComposer, Bloom, Noise, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'motion/react';
+import { LoadingBreadcrumb } from './ui/animated-loading-svg-text-shimmer';
 import { 
   X, 
   RotateCcw, 
@@ -30,16 +31,33 @@ interface Viewer3DProps {
 
 const PanoramicRoom = ({ imageUrl }: { imageUrl: string }) => {
   const texture = useLoader(THREE.TextureLoader, imageUrl);
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
+  
+  useEffect(() => {
+    if (texture) {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
+      texture.anisotropy = 16;
+      texture.needsUpdate = true;
+    }
+  }, [texture]);
   
   return (
     <group>
-      <mesh scale={[-1, 1, 1]}>
-        <sphereGeometry args={[50, 64, 64]} />
-        <meshBasicMaterial map={texture} side={THREE.BackSide} />
+      {/* Primary Environment Sphere - Massive radius to flatten projection and create room-scale depth */}
+      <mesh scale={[-1, 1, 1]} rotation={[0, -Math.PI / 2, 0]}>
+        <sphereGeometry args={[1000, 128, 128]} />
+        <meshBasicMaterial 
+          map={texture} 
+          side={THREE.BackSide} 
+          transparent={false}
+        />
       </mesh>
-      <ambientLight intensity={0.5} />
+
+      <ambientLight intensity={0.8} />
+      <pointLight position={[10, 10, 10]} intensity={0.5} />
     </group>
   );
 };
@@ -48,6 +66,7 @@ export default function Viewer3D({ design, onClose }: Viewer3DProps) {
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [useGyro, setUseGyro] = useState(false);
+  const [viewMode, setViewMode] = useState<'orbit' | 'first-person'>('orbit');
   const controlsRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +94,10 @@ export default function Viewer3D({ design, onClose }: Viewer3DProps) {
 
   const goToView = (view: 'ceiling' | 'floor' | 'horizon') => {
     if (controlsRef.current) {
-      const targetPolar = view === 'ceiling' ? 0.01 : view === 'floor' ? Math.PI - 0.01 : Math.PI / 2;
+      const ceilingLimit = Math.PI / 4 + 0.1;
+      const floorLimit = Math.PI * 0.75 - 0.1;
+      const targetPolar = view === 'ceiling' ? ceilingLimit : view === 'floor' ? floorLimit : Math.PI / 2;
+      
       controlsRef.current.setPolarAngle(targetPolar);
     }
   };
@@ -83,95 +105,186 @@ export default function Viewer3D({ design, onClose }: Viewer3DProps) {
   return (
     <motion.div
       ref={containerRef}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black flex flex-col font-sans"
+      initial={{ opacity: 0, scale: 1.1 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed inset-0 z-[100] bg-black flex flex-col font-sans"
     >
       {/* UI Overlay */}
-      <div className="absolute top-0 left-0 right-0 h-16 px-8 flex justify-between items-center z-10 bg-[#0d0d0f]/80 backdrop-blur-md border-b border-white/5">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-xs font-semibold text-brand-accent">
-            <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse shadow-[0_0_8px_#06b6d4]"></div>
-            Immersive Raytraced View
+      <div className="absolute top-0 left-0 right-0 h-20 px-10 flex justify-between items-center z-10 bg-gradient-to-b from-black/80 via-black/40 to-transparent backdrop-blur-[2px]">
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#A8FF00] animate-pulse" />
+              LuminaAI Immersive Core
+            </div>
+            <h2 className="text-xl font-extrabold text-white tracking-tight mt-1">
+              {design.style} <span className="text-white/40 font-light">Visualization</span>
+            </h2>
           </div>
-          <div className="h-4 w-[1px] bg-white/10"></div>
-          <h2 className="text-sm font-display font-bold text-white uppercase tracking-wider truncate max-w-[200px] md:max-w-md">
-            {design.style} Perspective
-          </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center bg-white/5 rounded-2xl p-1 border border-white/10 backdrop-blur-xl mr-4">
+            <button 
+              onClick={() => setViewMode('orbit')}
+              className={cn(
+                "px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all",
+                viewMode === 'orbit' ? "bg-white text-black shadow-xl" : "text-white/40 hover:text-white"
+              )}
+            >
+              Orbit
+            </button>
+            <button 
+              onClick={() => setViewMode('first-person')}
+              className={cn(
+                "px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all",
+                viewMode === 'first-person' ? "bg-white text-black shadow-xl" : "text-white/40 hover:text-white"
+              )}
+            >
+              Immersive
+            </button>
+          </div>
           <button
             onClick={toggleFullscreen}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white hidden md:block"
+            className="h-10 w-10 flex items-center justify-center hover:bg-white/10 rounded-xl transition-colors text-white/60 hover:text-white border border-white/5"
             title="Toggle Fullscreen"
           >
-            {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
           </button>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-white"
+            className="h-10 w-10 flex items-center justify-center bg-white text-black hover:bg-white/90 rounded-xl transition-all shadow-xl active:scale-95"
             id="close-viewer-btn"
           >
-            <X size={20} />
+            <X size={20} strokeWidth={3} />
           </button>
         </div>
       </div>
 
-      {/* Floating HUD & Quick View Controls */}
-      <div className="absolute top-24 left-8 flex flex-col gap-4 z-10 pointer-events-none md:pointer-events-auto">
-        <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-lg p-2 text-[10px] font-mono text-brand-accent shadow-[0_0_10px_rgba(6,182,212,0.2)]">
-          ENGINE: AI-RENDER | LUMENS: ADAPTIVE
-        </div>
-        
-        <div className="flex flex-col gap-2">
+      {/* Side HUD */}
+      <div className="absolute top-1/2 -translate-y-1/2 left-8 flex flex-col gap-6 z-10">
+        <div className="flex flex-col gap-3">
           <button 
             onClick={() => goToView('ceiling')}
-            className="w-10 h-10 glass-panel rounded-lg flex items-center justify-center text-white/40 hover:text-brand-accent hover:border-brand-accent/40 transition-all pointer-events-auto shadow-lg"
-            title="Ceiling View"
+            className="w-12 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center text-white/40 hover:text-white transition-all backdrop-blur-md group"
+            title="Tilt Up"
           >
-            <ArrowUp size={18} />
+            <ArrowUp size={20} className="group-hover:-translate-y-1 transition-transform" />
           </button>
           <button 
             onClick={() => resetCamera()}
-            className="w-10 h-10 glass-panel rounded-lg flex items-center justify-center text-white/40 hover:text-brand-accent hover:border-brand-accent/40 transition-all pointer-events-auto shadow-lg"
-            title="Reset Horizon"
+            className="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl flex items-center justify-center text-white hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all backdrop-blur-md"
+            title="Reset Orientation"
           >
-            <RotateCcw size={18} />
+            <RotateCcw size={20} />
           </button>
           <button 
             onClick={() => goToView('floor')}
-            className="w-10 h-10 glass-panel rounded-lg flex items-center justify-center text-white/40 hover:text-brand-accent hover:border-brand-accent/40 transition-all pointer-events-auto shadow-lg"
-            title="Floor View"
+            className="w-12 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center text-white/40 hover:text-white transition-all backdrop-blur-md group"
+            title="Tilt Down"
           >
-            <ArrowDown size={18} />
-          </button>
-          <div className="h-4" />
-          <button 
-            onClick={() => setUseGyro(!useGyro)}
-            className={`w-10 h-10 glass-panel rounded-lg flex items-center justify-center transition-all pointer-events-auto shadow-lg ${useGyro ? 'text-brand-accent border-brand-accent/50' : 'text-white/40'}`}
-            title="Mobile Gyro"
-          >
-            <Smartphone size={18} />
+            <ArrowDown size={20} className="group-hover:translate-y-1 transition-transform" />
           </button>
         </div>
+
+        <div className="h-px w-full bg-white/10" />
+
+        <button 
+          onClick={() => setUseGyro(!useGyro)}
+          className={cn(
+            "w-12 h-12 rounded-2xl flex items-center justify-center transition-all backdrop-blur-md border",
+            useGyro 
+              ? "bg-[#A8FF00]/20 border-[#A8FF00]/50 text-[#A8FF00] shadow-[0_0_20px_rgba(168,255,0,0.2)]" 
+              : "bg-white/5 border-white/10 text-white/40"
+          )}
+          title="Motion Control"
+        >
+          <Smartphone size={20} />
+        </button>
       </div>
 
       {/* 3D Scene */}
       <div className="flex-1 relative cursor-grab active:cursor-grabbing">
-        <Canvas dpr={[1, 2]} gl={{ antialias: true }}>
-          <PerspectiveCamera makeDefault position={[0, 0, 0.1]} fov={75} />
+        {/* Loading Overlay */}
+        <Suspense fallback={
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-50">
+            <div className="h-20 w-20 rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center mb-6 animate-pulse">
+              <Sparkles className="h-8 w-8 text-[#A8FF00]" />
+            </div>
+            <LoadingBreadcrumb text="Constructing 3D Spatial Mesh..." className="text-white scale-125" />
+            <p className="mt-4 text-[10px] font-black uppercase tracking-[0.4em] text-white/20">Awaiting High-Fidelity Texture Streaming</p>
+          </div>
+        }>
+          <Canvas 
+          dpr={window.devicePixelRatio > 2 ? 2 : window.devicePixelRatio} 
+          gl={{ 
+            antialias: true, 
+            logarithmicDepthBuffer: true,
+            powerPreference: "high-performance",
+            precision: "highp",
+            stencil: false,
+            depth: true
+          }}
+          onCreated={({ gl, scene }) => {
+            gl.setClearColor('#000000');
+            gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            const handleContextLost = (event: Event) => {
+              event.preventDefault();
+              console.warn("WebGL Context Lost. Cleaning up resources...");
+            };
+            
+            const handleContextRestored = () => {
+              console.log("WebGL Context Restored. Scene state preserved.");
+            };
+
+            const canvas = gl.domElement;
+            canvas.addEventListener("webglcontextlost", handleContextLost, false);
+            canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
+
+            // AUTO-DISPOSAL: The Canvas handles its own disposal, but we add an explicit observer for the container
+            return () => {
+              canvas.removeEventListener("webglcontextlost", handleContextLost);
+              canvas.removeEventListener("webglcontextrestored", handleContextRestored);
+              
+              // Resource deep-clearing
+              scene.traverse((object: any) => {
+                if (object.geometry) object.geometry.dispose();
+                if (object.material) {
+                  const materials = Array.isArray(object.material) ? object.material : [object.material];
+                  materials.forEach((mat: any) => {
+                    // Dispose textures
+                    Object.keys(mat).forEach(key => {
+                      if (mat[key] && mat[key].isTexture) mat[key].dispose();
+                    });
+                    mat.dispose();
+                  });
+                }
+              });
+              gl.renderLists.dispose();
+              gl.dispose();
+            };
+          }}
+        >
+          <PerspectiveCamera 
+            makeDefault 
+            position={[0, 0, 0]} 
+            fov={viewMode === 'first-person' ? 75 : 60} 
+            near={0.01}
+            far={2000}
+          />
           
           <Suspense fallback={null}>
             <PanoramicRoom imageUrl={design.url} />
-            <EffectComposer>
+            <EffectComposer multisampling={8}>
               <Bloom 
-                intensity={1.0} 
-                luminanceThreshold={0.8} 
-                luminanceSmoothing={0.9} 
+                intensity={0.3} 
+                luminanceThreshold={1.0} 
+                luminanceSmoothing={0} 
                 mipmapBlur 
               />
-              <Vignette eskil={false} offset={0.1} darkness={1.1} />
+              <Vignette eskil={false} offset={0.1} darkness={0.8} />
             </EffectComposer>
           </Suspense>
 
@@ -183,36 +296,55 @@ export default function Viewer3D({ design, onClose }: Viewer3DProps) {
               enablePan={false} 
               enableZoom={true} 
               minDistance={0.01} 
-              maxDistance={5}
-              rotateSpeed={-0.5} 
+              maxDistance={0.5} // Keep viewer close to center for best panorama fidelity
+              rotateSpeed={-0.3} 
+              panSpeed={0.5}
+              zoomSpeed={0.6}
+              dampingFactor={0.08}
+              enableDamping={true}
               autoRotate={false}
+              minPolarAngle={Math.PI / 4} // Restrict polar to prevent extreme top/bottom distortion
+              maxPolarAngle={Math.PI * 0.75}
+              target={[0, 0, 0]}
             />
           )}
         </Canvas>
+      </Suspense>
+    </div>
+
+      {/* Data HUD Overlay */}
+      <div className="absolute top-24 right-10 flex flex-col gap-4 pointer-events-none text-right">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Spatial Analysis</span>
+          <span className="text-xs font-mono text-white/40">Z-DEPTH: INFINITE</span>
+          <span className="text-xs font-mono text-white/40">FOV: {viewMode === 'first-person' ? '75°' : '60°'}</span>
+          <span className="text-xs font-mono text-white/40">RENDER: RAYTRACED_V4</span>
+        </div>
       </div>
 
-      {/* Footer Navigation Help */}
+      {/* Footer Info */}
       <AnimatePresence>
         {showControls && (
           <motion.div 
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 glass-panel rounded-2xl flex items-center gap-6"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 px-8 py-4 bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] flex items-center gap-8 shadow-2xl"
           >
-            <div className="flex items-center gap-2 text-white/80 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
-              <Sparkles size={14} className="text-brand-accent" /> <span>Realtime GI Active</span>
+            <div className="flex items-center gap-3 text-white/80 text-[10px] font-bold uppercase tracking-widest">
+              <div className="h-2 w-2 rounded-full bg-[#A8FF00]" />
+              Spatial Immersion Active
             </div>
-            <div className="h-4 w-px bg-white/20 hidden md:block" />
-            <div className="hidden md:flex items-center gap-2 text-white/80 text-[10px] font-bold uppercase tracking-widest">
-              <RotateCcw size={14} /> <span>Drag to Look</span>
+            <div className="h-4 w-px bg-white/10 hidden md:block" />
+            <div className="hidden md:flex items-center gap-3 text-white/40 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors cursor-default">
+              <RotateCcw size={14} /> <span>360° Drag</span>
             </div>
-            <div className="hidden md:flex items-center gap-2 text-white/80 text-[10px] font-bold uppercase tracking-widest">
-              <ZoomIn size={14} /> <span>Scroll to Zoom</span>
+            <div className="hidden md:flex items-center gap-3 text-white/40 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors cursor-default">
+              <ZoomIn size={14} /> <span>Scroll Zoom</span>
             </div>
-            <div className="h-4 w-px bg-white/20" />
+            <div className="h-4 w-px bg-white/10" />
             <button 
               onClick={() => setShowControls(false)}
-              className="text-white/40 hover:text-white text-[10px] font-bold uppercase tracking-widest"
+              className="text-white/20 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest"
             >
               Dismiss
             </button>
@@ -223,11 +355,16 @@ export default function Viewer3D({ design, onClose }: Viewer3DProps) {
       {!showControls && (
         <button 
           onClick={() => setShowControls(true)}
-          className="absolute bottom-6 right-6 p-3 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white/60 hover:text-white shadow-xl"
+          className="absolute bottom-10 right-10 h-12 w-12 bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl rounded-full flex items-center justify-center text-white/40 hover:text-white transition-all shadow-2xl"
         >
           <Info size={20} />
         </button>
       )}
     </motion.div>
   );
+}
+
+// Utility function used in the modified code
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(" ");
 }
