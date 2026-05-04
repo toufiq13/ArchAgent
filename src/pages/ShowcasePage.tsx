@@ -8,52 +8,50 @@ import { ImageLightbox } from "@/components/ImageLightbox";
 import { Logo } from "@/components/Logo";
 
 const ARCH_IMAGES = [
-  "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?q=80&w=2070&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2070&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1628592102144-8da059286f7b?q=80&w=2070&auto=format&fit=crop"
+  "/showcase/ceiling.webp",
+  "/showcase/door.webp"
 ];
 
 const TEMPLATE_DATA: Record<string, string[]> = {
   door: [
-    "https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1510133465104-517711200676?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1544436034-7a9ed4e02256?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1541604193435-22077a11bd44?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1491897554428-130a60dd4757?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=800&q=80"
+    "/showcase/showcase/Door Designs/Door Design 1",
+    "/showcase/showcase/Door Designs/Door Design 2",
+    "/showcase/showcase/Door Designs/Door Design 3",
+    "/showcase/showcase/Door Designs/Door Design 4",
+    "/showcase/showcase/Door Designs/Door Design 5",
+    "/showcase/showcase/Door Designs/Door Design 6"
   ],
   ceiling: [
-    "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1505693333148-5d334546a5c1?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1544450297-765586618451?auto=format&fit=crop&w=800&q=80"
+    "/showcase/showcase/ceiling designs/ceiling design 1",
+    "/showcase/showcase/ceiling designs/ceiling design 2",
+    "/showcase/showcase/ceiling designs/ceiling design 3",
+    "/showcase/showcase/ceiling designs/ceiling design 4",
+    "/showcase/showcase/ceiling designs/ceiling design 5",
+    "/showcase/showcase/ceiling designs/ceiling design 6"
   ],
   wall: [
-    "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1510074377623-8cf13fb86c08?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1582531668704-5154376378ba?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=800&q=80"
+    "/showcase/showcase/wall designs/Wall Design 1",
+    "/showcase/showcase/wall designs/Wall Design 2",
+    "/showcase/showcase/wall designs/Wall Design 3",
+    "/showcase/showcase/wall designs/Wall Design 4",
+    "/showcase/showcase/wall designs/Wall Design 5",
+    "/showcase/showcase/wall designs/Wall Design 6"
   ],
   tv: [
-    "https://images.unsplash.com/photo-1593784991095-a20503947506?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1583847268964-b28dc2f51ac9?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1567537234907-f6551b9e585f?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1629079447841-d8ec9212000d?auto=format&fit=crop&w=800&q=80"
+    "/showcase/showcase/tv showcase/tv showcase 1",
+    "/showcase/showcase/tv showcase/tv showcase 2",
+    "/showcase/showcase/tv showcase/tv showcase 3",
+    "/showcase/showcase/tv showcase/tv showcase 4",
+    "/showcase/showcase/tv showcase/tv showcase 5",
+    "/showcase/showcase/tv showcase/tv showcase 6"
   ],
   window: [
-    "https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600608848244-9d4211d3302c?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1600566752355-3979ff1040ad?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1464938050520-ef2270bb8ce8?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1449156001437-3a16639eb2ab?auto=format&fit=crop&w=800&q=80"
+    "/showcase/showcase/window designs/window design 1",
+    "/showcase/showcase/window designs/window design 2",
+    "/showcase/showcase/window designs/window design 3",
+    "/showcase/showcase/window designs/window design 4",
+    "/showcase/showcase/window designs/window design 5",
+    "/showcase/showcase/window designs/window design 6"
   ]
 };
 
