@@ -131,7 +131,7 @@ IMPORTANT: Use current market rates in India. Return ONLY a valid JSON object.`;
   "totalEstimate": 0,
   "currency": "INR"
 }
-category must be one of: "Material", "Labor", or "Contingency".`,
+category must be one of: "Material", "Labor", "Furniture", "Design", "Construction", or "Contingency".`,
       stream: false 
     })
   });
@@ -203,32 +203,29 @@ export async function generateMultipleDesignImages(
 
   const seeds = Array.from({ length: count }, (_, i) => baseSeed + i * 420);
 
-  const images: string[] = [];
-  const errors: string[] = [];
-
-  // Run in sequence with significant stagger to avoid cascading 429s
-  for (let i = 0; i < count; i++) {
+  // Parallelize generation to speed up delivery
+  const generationPromises = Array.from({ length: count }).map(async (_, i) => {
     try {
       const variedPrompt = prompt + (variations[i] || "");
       
-      // Delay: 0s for first, then smaller increments to speed up generation
+      // Minimal stagger to avoid split-second concurrency conflicts if any, but essentially parallel
       if (i > 0) {
-        const delay = 1000 + (i * 400) + (Math.random() * 500); 
-        console.log(`[Image] Staggering variant ${i+1}/${count} by ${delay.toFixed(0)}ms...`);
-        await new Promise(r => setTimeout(r, delay));
+        await new Promise(r => setTimeout(r, i * 250));
       }
       
-      const img = await generateDesignImage(variedPrompt, "1K", seeds[i]);
-      if (img) images.push(img);
+      return await generateDesignImage(variedPrompt, "1K", seeds[i]);
     } catch (err: any) {
       console.warn(`[Image] Variant ${i+1} synthesis failed:`, err.message);
-      errors.push(err.message);
+      return null;
     }
-  }
+  });
+
+  const results = await Promise.all(generationPromises);
+  const images = results.filter((img): img is string => img !== null);
 
   // Graceful degradation: If at least ONE image succeeded, return it instead of failing
   if (images.length === 0) {
-    throw new Error(`Architectural synthesis cluster is busy. All attempts were rejected: ${errors[0]}`);
+    throw new Error(`Architectural synthesis cluster is busy. Please try again in 30 seconds.`);
   }
   
   console.log(`[Image] Cluster synthesis complete: ${images.length}/${count} variants delivered.`);

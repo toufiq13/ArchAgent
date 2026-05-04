@@ -37,6 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "motion/react";
 import { getArchitectStream, getCostEstimation, generateDesignImage, generateMultipleDesignImages, generateProjectTitle, enhancePrompt, type CostBreakdown } from "@/lib/gemini";
+import { generateDesignPDF } from "@/lib/pdfGenerator";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import { STYLE_PRESETS, type StylePreset, type DesignConcept } from "@/types";
@@ -181,6 +182,8 @@ export default function OrchestrationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isEstimatingCost, setIsEstimatingCost] = useState(false);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [costInput, setCostInput] = useState("");
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<"1K" | "2K" | "4K">("1K");
@@ -520,6 +523,29 @@ export default function OrchestrationPage() {
 
   const updateSession = (id: string, updates: Partial<ProjectSession>) => {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const handleDownloadPDF = async (type: "Invoice" | "Payslip" | "Estimation") => {
+    if (!currentSession || !currentSession.costBreakdown) return;
+    setIsDownloadingPDF(true);
+    setDownloadSuccess(null);
+    try {
+      await generateDesignPDF(
+        currentSession.title,
+        currentSession.designPrompt || "Architectural Design Concept",
+        currentSession.costBreakdown,
+        type,
+        selectedStyle.name,
+        user?.email || "Valued Architect",
+        currentSession.designImage || (currentSession.designImages.length > 0 ? currentSession.designImages[0] : null)
+      );
+      setDownloadSuccess(type);
+      setTimeout(() => setDownloadSuccess(null), 3000);
+    } catch (error) {
+      console.error("PDF Generation failed:", error);
+    } finally {
+      setIsDownloadingPDF(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -982,8 +1008,49 @@ export default function OrchestrationPage() {
                   </div>
                 ) : currentSession?.costBreakdown ? (
                   <div className="space-y-12">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {["Material", "Labor", "Contingency"].map((cat) => {
+                    {/* Summary Section - Primary Actions First */}
+                    <div className="space-y-8">
+                      <div className="p-10 rounded-[3rem] bg-black border border-white/20 text-white shadow-[0_20px_60px_rgba(0,0,0,0.3)] max-w-md mx-auto text-center backdrop-blur-xl relative z-10">
+                        <div className="flex flex-col gap-6">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Total Estimated Investment</span>
+                            <span className="text-6xl font-black tracking-tighter text-white">
+                              ₹ {currentSession.costBreakdown.totalEstimate.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-center gap-4 text-[10px] text-white/50 font-bold leading-relaxed border-t border-white/5 pt-6">
+                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                            <span>ALGORITHMIC ESTIMATE BASED ON SPECS</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PDF Download Actions */}
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 py-4 relative z-20">
+                         <Button 
+                           onClick={() => handleDownloadPDF("Payslip")}
+                           disabled={isDownloadingPDF}
+                           className={cn(
+                             "h-16 px-12 rounded-[2rem] font-bold text-sm uppercase tracking-[0.2em] shadow-2xl transition-all active:scale-95 flex items-center gap-4 border-2 group",
+                             downloadSuccess === "Payslip" 
+                               ? "bg-green-500 border-green-500 text-white" 
+                               : "bg-white text-black hover:bg-black hover:text-white border-white"
+                           )}
+                         >
+                           {isDownloadingPDF ? (
+                             <Loader2 className="h-5 w-5 animate-spin" />
+                           ) : (
+                             downloadSuccess === "Payslip" ? <Check className="h-5 w-5" /> : <Download className="h-5 w-5 group-hover:-translate-y-1 transition-transform" />
+                           )}
+                           {downloadSuccess === "Payslip" ? "Payslip Downloaded" : "Download Payslip"}
+                         </Button>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-white/10" />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                      {["Design", "Material", "Construction", "Labor", "Furniture", "Contingency"].map((cat) => {
                         const items = currentSession.costBreakdown!.items.filter(i => i.category === cat);
                         if (items.length === 0) return null;
                         return (
@@ -1003,23 +1070,6 @@ export default function OrchestrationPage() {
                           </div>
                         );
                       })}
-                    </div>
-
-                    <Separator className="bg-white/10" />
-
-                    <div className="p-10 rounded-[3rem] bg-black border border-white/20 text-white shadow-[0_20px_60px_rgba(0,0,0,0.3)] max-w-md mx-auto text-center backdrop-blur-xl">
-                      <div className="flex flex-col gap-6">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 mb-2">Total Estimated Investment</span>
-                          <span className="text-6xl font-black tracking-tighter text-white">
-                            ₹ {currentSession.costBreakdown.totalEstimate.toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-center gap-4 text-[10px] text-white/50 font-bold leading-relaxed border-t border-white/5 pt-6">
-                          <div className="h-2 w-2 rounded-full bg-green-500" />
-                          <span>ALGORITHMIC ESTIMATE BASED ON SPECS</span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 ) : (
