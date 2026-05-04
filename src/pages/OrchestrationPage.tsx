@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import { getArchitectStream, getCostEstimation, generateDesignImage, generateMultipleDesignImages, generateProjectTitle, enhancePrompt, type CostBreakdown } from "@/lib/gemini";
 import { generateDesignPDF } from "@/lib/pdfGenerator";
 import { cn } from "@/lib/utils";
@@ -485,8 +486,12 @@ export default function OrchestrationPage() {
         designImage: images[0]
       });
       triggerSuccessFeedback();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      toast.error("Synthesis Cluster Busy", {
+        description: error.message || "Failed to generate design variations. Please try again.",
+        duration: 8000
+      });
     } finally {
       setIsGeneratingImage(false);
     }
@@ -514,8 +519,12 @@ export default function OrchestrationPage() {
       
       // Delay it slightly so they don't fire at the exact same millisecond if they complete simultaneously
       setTimeout(triggerSuccessFeedback, 300);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      toast.error("Financial Data Cluster Busy", {
+        description: "Encountered a delay in material rate synchronization. Retrying recommendation.",
+        duration: 5000
+      });
     } finally {
       setIsEstimatingCost(false);
     }

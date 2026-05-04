@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { Toaster } from "sonner";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const OrchestrationPage = lazy(() => import("./pages/OrchestrationPage"));
@@ -54,6 +55,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors theme="dark" />
       <Suspense fallback={<div className="bg-black h-screen w-screen flex items-center justify-center text-white font-sans uppercase tracking-[0.4em] text-[10px]">Synchronizing Neural Architecture...</div>}>
         <Routes>
           <Route path="/" element={<HomePage />} />

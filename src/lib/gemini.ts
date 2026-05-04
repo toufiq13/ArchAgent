@@ -203,19 +203,22 @@ export async function generateMultipleDesignImages(
 
   const seeds = Array.from({ length: count }, (_, i) => baseSeed + i * 420);
 
-  // Parallelize generation to speed up delivery
+  // Parallelize generation with a more conservative stagger to avoid rate limits
   const generationPromises = Array.from({ length: count }).map(async (_, i) => {
     try {
       const variedPrompt = prompt + (variations[i] || "");
       
-      // Minimal stagger to avoid split-second concurrency conflicts if any, but essentially parallel
+      // Reasonable stagger to prevent simultaneous hits to the rendering API
       if (i > 0) {
-        await new Promise(r => setTimeout(r, i * 250));
+        const stagger = 2000 + (i * 1000); 
+        await new Promise(r => setTimeout(r, stagger));
       }
       
-      return await generateDesignImage(variedPrompt, "1K", seeds[i]);
+      console.log(`[Image] Dispatching variant ${i + 1}/${count}...`);
+      const img = await generateDesignImage(variedPrompt, "1K", seeds[i]);
+      return img;
     } catch (err: any) {
-      console.warn(`[Image] Variant ${i+1} synthesis failed:`, err.message);
+      console.error(`[Image] Variant ${i+1} synthesis failed:`, err.message);
       return null;
     }
   });
@@ -225,7 +228,7 @@ export async function generateMultipleDesignImages(
 
   // Graceful degradation: If at least ONE image succeeded, return it instead of failing
   if (images.length === 0) {
-    throw new Error(`Architectural synthesis cluster is busy. Please try again in 30 seconds.`);
+    throw new Error(`The architectural synthesis cluster is currently at capacity. Please allow 15-30 seconds for resources to recycle and try again.`);
   }
   
   console.log(`[Image] Cluster synthesis complete: ${images.length}/${count} variants delivered.`);
