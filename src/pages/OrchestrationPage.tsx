@@ -99,7 +99,7 @@ const triggerSuccessFeedback = () => {
     particleCount: 80,
     spread: 70,
     origin: { y: 0.9 },
-    colors: ['#3b82f6', '#a855f7', '#ffffff'] // Match app cyan/purple/glow tones
+    colors: ['#06b6d4', '#ffffff', '#a855f7'] // Match app cyan/purple/glow tones
   });
 };
 
@@ -579,14 +579,14 @@ export default function OrchestrationPage() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
-      className="flex h-screen w-full bg-[#050505] text-white overflow-hidden font-sans relative"
+      className="flex h-screen w-full bg-[#0a0a0c] text-white overflow-hidden font-sans relative"
     >
       <AnimatePresence>
         {isInitializing && (
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[1000] bg-[#050505] flex items-center justify-center backdrop-blur-xl"
+            className="fixed inset-0 z-[1000] bg-[#0a0a0c] flex items-center justify-center backdrop-blur-xl"
           >
             <div className="flex flex-col items-center gap-6">
               <LoadingBreadcrumb text="Synchronizing Project Sessions..." className="scale-125" />
@@ -809,7 +809,7 @@ export default function OrchestrationPage() {
 
                 <div className="flex items-center gap-3">
                   <div className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-[#A8FF00] animate-pulse" />
+                    <div className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
                     <span className="text-[10px] font-bold text-white/50 tracking-widest uppercase">Agent Synchronized</span>
                   </div>
                 </div>
@@ -904,7 +904,7 @@ export default function OrchestrationPage() {
                                         : "-right-14 text-white/50 hover:text-white bg-white/10"
                                     )}
                                   >
-                                    {copiedId === msgId ? <Check className="h-3.5 w-3.5 text-[#A8FF00]" /> : <Copy className="h-3.5 w-3.5" />}
+                                    {copiedId === msgId ? <Check className="h-3.5 w-3.5 text-cyan-400" /> : <Copy className="h-3.5 w-3.5" />}
                                   </button>
                                 </div>
                               </motion.div>
@@ -1203,7 +1203,7 @@ export default function OrchestrationPage() {
                         onClick={() => copyToClipboard(currentSession.designPrompt!)}
                         className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all shadow-lg"
                       >
-                        {copied ? <Check className="h-4 w-4 text-[#A8FF00]" /> : <Copy className="h-4 w-4" />}
+                        {copied ? <Check className="h-4 w-4 text-cyan-400" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
                     
@@ -1249,13 +1249,13 @@ export default function OrchestrationPage() {
                         <motion.div 
                           animate={{ rotate: -360 }}
                           transition={{ repeat: Infinity, duration: 12, ease: "linear" }}
-                          className="absolute inset-4 rounded-[2rem] border-2 border-dashed border-[#A8FF00]/40"
+                          className="absolute inset-4 rounded-[2rem] border-2 border-dashed border-cyan-500/20"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Bot className="h-8 w-8 text-white/40" />
                         </div>
                       </div>
-                      <LoadingBreadcrumb text="Simulating 4 Architectural Variations..." className="text-white scale-125" />
+                      <LoadingBreadcrumb text="Synthesizing 4 Diverse Architectural Concepts..." className="text-white scale-125" />
                       <p className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-bold animate-pulse">Running Neural Rendering Engine v4.2</p>
                     </div>
                   )}
@@ -1268,14 +1268,26 @@ export default function OrchestrationPage() {
                             Design Matrix <span className="text-white/20 ml-2">[{currentSession.designImages.length} DESIGNS]</span>
                           </h3>
                         </div>
-                        <Button 
-                          onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
-                          disabled={isGeneratingImage}
-                          size="sm"
-                          className="h-10 px-6 text-[10px] tracking-widest uppercase font-black bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 rounded-xl transition-all"
-                        >
-                          ⟳ Regenerate Collection
-                        </Button>
+                        <div className="flex items-center gap-3">
+                          <Button 
+                            onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
+                            disabled={isGeneratingImage}
+                            size="sm"
+                            className="h-10 px-6 text-[10px] tracking-widest uppercase font-black bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 rounded-xl transition-all"
+                          >
+                            ⟳ Regenerate Collection
+                          </Button>
+                          <Button 
+                            onClick={() => handleGenerateDesign(currentSession.designPrompt!)}
+                            disabled={isGeneratingImage}
+                            size="sm"
+                            variant="secondary"
+                            className="h-10 px-6 text-[10px] tracking-widest uppercase font-black bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500 hover:text-black border border-cyan-500/20 rounded-xl transition-all"
+                          >
+                            <Sparkles className="h-3 w-3 mr-2" />
+                            Synthesize New Variations
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-2">
@@ -1291,13 +1303,13 @@ export default function OrchestrationPage() {
                             className={cn(
                               "relative group rounded-[2.5rem] overflow-hidden border-2 cursor-pointer transition-all aspect-square shadow-2xl",
                               currentSession.designImage === img 
-                                ? "border-[#A8FF00] shadow-[#A8FF00]/10 ring-4 ring-[#A8FF00]/10 scale-[1.03] z-10" 
+                                ? "border-cyan-500 shadow-cyan-500/20 ring-4 ring-cyan-500/10 scale-[1.03] z-10" 
                                 : "border-white/5 hover:border-white/20 grayscale-[0.4] hover:grayscale-0"
                             )}
                           >
                             <img src={img} alt={`Design variant ${idx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0c]/90 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
                             
                             <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button 
@@ -1305,29 +1317,34 @@ export default function OrchestrationPage() {
                                   e.stopPropagation();
                                   setSelectedImage(img);
                                 }}
-                                className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/40"
+                                className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-cyan-500 hover:text-black transition-colors"
                               >
                                 <Maximize size={14} />
                               </button>
                             </div>
 
-                            {currentSession.designImage === img && (
-                              <div className="absolute top-4 left-4 bg-[#A8FF00] text-black rounded-full px-3 py-1 font-black text-[9px] tracking-[0.1em] shadow-[0_0_20px_rgba(168,255,0,0.4)]">
-                                SELECTED
+                            <div className="absolute top-4 left-4 flex flex-col gap-1">
+                              {currentSession.designImage === img && (
+                                <div className="bg-cyan-500 text-black rounded-full px-3 py-1 font-black text-[9px] tracking-[0.1em] shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                                  SELECTED
+                                </div>
+                              )}
+                              <div className="bg-black/40 backdrop-blur-lg text-white/70 rounded-full px-3 py-1 font-black text-[9px] tracking-[0.1em] border border-white/10">
+                                CONCEPT 0{idx + 1}
                               </div>
-                            )}
-
+                            </div>
+                            
                             <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between translate-y-2 group-hover:translate-y-0 transition-transform">
                               <div className="flex flex-col">
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Variant</span>
-                                <span className="text-2xl font-black text-[#A8FF00]">0{idx + 1}</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 opacity-60">Spatial Scale</span>
+                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-tighter">Wide Perspective</span>
                               </div>
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleEnterRoom(img);
                                 }}
-                                className="h-10 w-10 rounded-full bg-[#A8FF00] text-black flex items-center justify-center shadow-lg hover:scale-110 transition-all"
+                                className="h-10 w-10 rounded-full bg-cyan-500 text-black flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-110 transition-all"
                               >
                                 <Sparkles size={16} />
                               </button>
@@ -1348,7 +1365,7 @@ export default function OrchestrationPage() {
                         <div className="flex items-center gap-3">
                           <Button 
                             onClick={() => handleEnterRoom(currentSession.designImage!)} 
-                            className="bg-[#A8FF00] text-black hover:bg-[#8CD300] h-12 px-8 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_8px_25px_rgba(168,255,0,0.2)] transition-all active:scale-95"
+                            className="bg-cyan-500 text-black hover:bg-cyan-400 h-12 px-8 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_8px_25px_rgba(6,182,212,0.3)] transition-all active:scale-95"
                           >
                             <Sparkles className="h-4 w-4 mr-2" />
                             3D Immersive Flow
@@ -1369,7 +1386,7 @@ export default function OrchestrationPage() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-40" />
                         <div className="absolute bottom-10 left-10 flex flex-col gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#A8FF00]">Master Visual</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-500">Master Visual</span>
                           <p className="text-white/60 text-xs font-medium max-w-md line-clamp-2 italic">
                             "{currentSession.designPrompt}"
                           </p>
@@ -1441,7 +1458,7 @@ export default function OrchestrationPage() {
                   setSelectedImage(null);
                   handleEnterRoom(selectedImage);
                 }}
-                className="gap-2 h-12 px-6 rounded-xl bg-[#A8FF00] text-black hover:bg-[#8CD300] border-0"
+                className="gap-2 h-12 px-6 rounded-xl bg-cyan-500 text-black hover:bg-cyan-400 border-0 shadow-lg shadow-cyan-500/20"
               >
                 Enter Room
               </Button>
@@ -1466,7 +1483,7 @@ export default function OrchestrationPage() {
                 }}
                 className="bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl h-12 px-5 gap-2"
               >
-                {copied ? <Check className="h-4 w-4 text-[#A8FF00]" /> : <Share2 className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-cyan-400" /> : <Share2 className="h-4 w-4" />}
                 <span className="font-bold text-xs uppercase tracking-wider">{copied ? "Copied!" : "Image Link"}</span>
               </Button>
               

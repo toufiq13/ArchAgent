@@ -193,42 +193,75 @@ export async function generateMultipleDesignImages(
 ): Promise<string[]> {
   const baseSeed = Math.floor(Math.random() * 1000000);
   
-  // Variations to ensure diversity across the 4 images
+  // Variations tuned for absolute architectural distinctiveness and spatial realism
   const variations = [
-    ", 360 degree equirectangular panorama, cinematic wide-angle, hyper-realistic, 8k, architectural digest, sharp focus, natural daylight",
-    ", equirectangular 360 degree view, eye-level perspective, master-crafted materials, twilight lighting, professional visualization, high detail",
-    ", 360 panoramic architectural render, blueprint focus, detailed textures, warm interior glow, luxury aesthetic, ultra-sharp",
-    ", full 360 degree immersive panorama, dramatic architectural lighting, morning mist, high contrast, obsidian and wood textures, premium render"
+    ", focus: Grand Open-Plan Architecture, monumental escala, quadruple-height dramatic foyer, floating spiral staircases, expansive wall-to-wall glazing, immersive natural light, panoramic 360 equirectangular render",
+    ", focus: Bio-Integrated Organic Design, flowing curvilinear wooden structures, integrated indoor waterfalls and tropical greenery, soft sun-dappled interior lighting, seamless 360 perspective, hyper-realistic cozy atmosphere",
+    ", focus: High-Contrast Brutalist Modernism, raw textured concrete volumes, dramatic cantilevered ceilings, floor-recessed lighting, stark geometric shadows, expansive industrial scale, immersive 360 panoramic architectural photography",
+    ", focus: Minimalist Zen-Tech Sanctuary, translucent glass partitions, integrated smart-holographic interfaces, floating furniture systems, serene white-on-white palette, endless spatial depth, theoretical high-tech 360 panoramic interior"
   ];
 
   const seeds = Array.from({ length: count }, (_, i) => baseSeed + i * 420);
+  const images: string[] = [];
 
-  // Parallelize generation with a more conservative stagger to avoid rate limits
-  const generationPromises = Array.from({ length: count }).map(async (_, i) => {
-    try {
-      const variedPrompt = prompt + (variations[i] || "");
-      
-      // Reasonable stagger to prevent simultaneous hits to the rendering API
-      if (i > 0) {
-        const stagger = 2000 + (i * 1000); 
-        await new Promise(r => setTimeout(r, stagger));
+  // Individual variant generation with retry
+  const generateWithRetry = async (variedPrompt: string, seed: number, idx: number, maxAttempts: number) => {
+    let lastError = "";
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        if (attempt > 0) {
+          const backoff = 4000 + (attempt * 3000);
+          console.log(`[Image] Variant ${idx} retrying (attempt ${attempt+1}/${maxAttempts}) in ${backoff}ms...`);
+          await new Promise(r => setTimeout(r, backoff));
+        }
+
+        console.log(`[Image] Dispatching variant ${idx}/${count} (Attempt ${attempt + 1})...`);
+        const img = await generateDesignImage(variedPrompt, "1K", seed);
+        if (img) return img;
+      } catch (err: any) {
+        lastError = err.message;
+        console.warn(`[Image] Variant ${idx} attempt ${attempt+1} failed:`, lastError);
+        const isTransient = lastError.toLowerCase().includes("load") || 
+                          lastError.toLowerCase().includes("capacity") || 
+                          lastError.toLowerCase().includes("busy");
+        if (!isTransient) throw err;
       }
-      
-      console.log(`[Image] Dispatching variant ${i + 1}/${count}...`);
-      const img = await generateDesignImage(variedPrompt, "1K", seeds[i]);
+    }
+    return null;
+  };
+
+  // 1. Prioritize the FIRST image (Variant 1) - spend more effort on it
+  try {
+    const primaryImg = await generateWithRetry(prompt + variations[0], seeds[0], 1, 4);
+    if (primaryImg) images.push(primaryImg);
+  } catch (err) {
+    console.error("[Image] Primary variant failed:", err);
+  }
+
+  // 2. Launch others with staggered starts if possible
+  const variantPromises = Array.from({ length: count - 1 }).map(async (_, i) => {
+    const variantIdx = i + 2;
+    const variedPrompt = prompt + (variations[i + 1] || "");
+    const seed = seeds[i + 1];
+    
+    // Stagger starts: Variant 2 at 5s, Variant 3 at 10s, Variant 4 at 15s
+    await new Promise(r => setTimeout(r, i * 5000 + 2000));
+    
+    try {
+      const img = await generateWithRetry(variedPrompt, seed, variantIdx, 2);
       return img;
-    } catch (err: any) {
-      console.error(`[Image] Variant ${i+1} synthesis failed:`, err.message);
+    } catch (err) {
+      console.warn(`[Image] Variant ${variantIdx} failed:`, err);
       return null;
     }
   });
 
-  const results = await Promise.all(generationPromises);
-  const images = results.filter((img): img is string => img !== null);
+  const remainingResults = await Promise.all(variantPromises);
+  remainingResults.forEach(img => { if (img) images.push(img); });
 
   // Graceful degradation: If at least ONE image succeeded, return it instead of failing
   if (images.length === 0) {
-    throw new Error(`The architectural synthesis cluster is currently at capacity. Please allow 15-30 seconds for resources to recycle and try again.`);
+    throw new Error(`The architectural synthesis cluster is currently at capacity. Please allow 30 seconds for resources to recycle and try again.`);
   }
   
   console.log(`[Image] Cluster synthesis complete: ${images.length}/${count} variants delivered.`);
@@ -236,7 +269,7 @@ export async function generateMultipleDesignImages(
 }
 
 /**
- * Enhance a prompt via backend.
+ * Enhance a prompt via backend with a heavy focus on 360-degree panoramic architectural consistency.
  */
 export async function enhancePrompt(userPrompt: string, styleKeywords: string): Promise<string> {
   if (!userPrompt?.trim()) return userPrompt || '';
@@ -245,15 +278,22 @@ export async function enhancePrompt(userPrompt: string, styleKeywords: string): 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        messages: [{ role: "user", parts: [{ text: `User Wish: ${userPrompt}\nStyle: ${styleKeywords}` }] }],
-        systemInstruction: "You are a professional architectural prompt engineer. Enhance the user prompt with details about lighting, materials, and composition for a stunning visualization. Return ONLY the enhanced string.",
+        messages: [{ role: "user", parts: [{ text: `Original Vision: "${userPrompt}"\nArchitectural Style: "${styleKeywords}"` }] }],
+        systemInstruction: "You are a world-class architectural visualization prompt engineer. Your task is to transform simple user visions into high-end technical prompts for an AI image generator. \n\nMANDATORY ARCHITECTURAL RULES:\n1. START EACH PROMPT with: 'A seamless 360-degree equirectangular panorama wide-angle interior view of [Concept]'.\n2. ENFORCE SPATIAL SCALE: Emphasize 'spacious layout', 'large architectural volume', 'high ceilings', and 'deep perspective' to prevent cramped feeling.\n3. DETAIL LIGHTING: Describe global illumination, natural light shafts, raytraced reflections, and soft ambient occlusion.\n4. SPECIFY MATERIALS: Mention premium textures like brushed titanium, honed marble, sustainable oak, or artisanal glass.\n5. ARCHITECTURAL DIVERSITY: Ensure the layout is complex and interesting, moving beyond basic rectangular rooms.\n\nOutput ONLY the final enhanced prompt string.",
         stream: false 
       })
     });
 
     if (!res.ok) return userPrompt;
     const data = await res.json();
-    return data.text?.trim() || userPrompt;
+    let enhanced = data.text?.trim() || userPrompt;
+    
+    // Safety check: Ensure the 360 keywords are present if missing
+    if (!enhanced.toLowerCase().includes("panorama") && !enhanced.toLowerCase().includes("360-degree")) {
+      enhanced = "A seamless 360-degree equirectangular panorama wide-angle interior of " + enhanced;
+    }
+    
+    return enhanced;
   } catch (error) {
     return userPrompt;
   }
