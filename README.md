@@ -2,6 +2,24 @@
 
 **ArchAgent** is a premium, AI-powered architectural visualization platform designed to generate spacious, realistic, and highly diverse architectural concepts. With its built-in immersive 360-degree panorama viewer, users can instantly step into the generated interiors and explore spatial dimensions like never before.
 
+## 📸 See It In Action
+
+### 1. Generating Diverse Architectural Concepts
+> Enter a simple prompt and watch the neural engine synthesize 4 highly distinct, spacious architectural variations.
+
+<!-- Add your image here: ![Generation Process](path/to/generation-screenshot.png) -->
+<div align="center">
+  <img src="https://placehold.co/800x400/111111/cyan?text=Architectural+Generation+Screenshot" alt="Generation UI" width="100%"/>
+</div>
+
+### 2. Immersive 360° Viewing Experience
+> Click into any generated design to explore a true-to-scale, wide-angle 360-degree environment with depth perception.
+
+<!-- Add your video/GIF here: ![Immersive 360 Demo](path/to/immersive-demo.gif) -->
+<div align="center">
+  <img src="https://placehold.co/800x450/111111/a8ff00?text=360+Degree+Immersive+Viewer+Demo+GIF" alt="Immersive 360 Viewer" width="100%"/>
+</div>
+
 ## 🚀 Features
 
 - **AI Concept Generation:** Transform simple prompt ideas into sophisticated architectural visualizations.
