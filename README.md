@@ -1,20 +1,68 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ArchAgent 🏛️
 
-# Run and deploy your AI Studio app
+**ArchAgent** is a premium, AI-powered architectural visualization platform designed to generate spacious, realistic, and highly diverse architectural concepts. With its built-in immersive 360-degree panorama viewer, users can instantly step into the generated interiors and explore spatial dimensions like never before.
 
-This contains everything you need to run your app locally.
+## 🚀 Features
 
-View your app in AI Studio: https://ai.studio/apps/3bdfe684-c96e-4392-a113-01a2b9f8d7c0
+- **AI Concept Generation:** Transform simple prompt ideas into sophisticated architectural visualizations.
+- **High-Diversity Output:** Every prompt synthesizes into 4 highly distinct and creative room designs covering multiple styles (Modern, Brutalist, Biophilic, Minimalist).
+- **Realistic Room Scale:** Utilizing wide-angle synthesis and careful spatial prompt engineering to guarantee spacious and true-to-life architectural proportions.
+- **True Immersive 360° Viewing:** Explore generated architecture in an interactive 360-degree mode leveraging `three.js` and `@react-three/fiber` with real-time bloom and vignette effects.
+- **Mobile Gyroscope Support:** Fully immersive exploration on mobile devices with device orientation controls.
+- **Beautiful Glassmorphic UI:** A dark-themed, highly polished user interface with cinematic animations, high-end typography, and intuitive UX flows.
 
-## Run Locally
+## 🛠️ Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend Framework:** React 19, Vite, TypeScript
+- **Styling & UI:** Tailwind CSS v4, Motion (Framer Motion), class-variance-authority, clsx, tailwind-merge
+- **Icons:** Lucide React
+- **3D & Rendering:** Three.js, React Three Fiber, React Three Drei, React Three Postprocessing
+- **AI / Generative:** Google Gen AI SDK (`@google/genai`) - powered by Google Gemini Models
 
+## 📦 Getting Started
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GOOGLE_GENAI_API_KEY` (or `GEMINI_API_KEY`) in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/arch-agent.git
+cd arch-agent
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Setup Environment Variables
+
+Create a `.env` file in the root directory of your project.
+
+```bash
+touch .env
+```
+
+Add your Google Gemini API key to the `.env` file for the AI generation capabilities:
+
+```bash
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 4. Run the development server
+
+```bash
+npm run dev
+```
+
+The application will be running locally at `http://localhost:3000`.
+
+## 🎮 How to use
+
+1. **Prompt your vision:** Enter an interior or architectural design prompt into the generator (e.g., "A modern luxury living room in a high-rise").
+2. **Select a Style:** Choose a stylistic direction or let the neural engine suggest a diverse set.
+3. **Generate:** Watch the engine synthesize 4 unique, spatially vast 360° concepts.
+4. **Immerse:** Click the **Enter Room** or **3D Immersive Flow** button on any concept to dive into a full 360-degree panorama perspective. Scroll to zoom and drag to orbit around the room.
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).
